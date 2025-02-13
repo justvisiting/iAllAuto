@@ -454,7 +454,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         </head>
         <body>
             <div class="commit-view">
-                <button class="refresh-button" onclick="refreshChanges()"> Refresh</button>
+                <button class="refresh-button" onclick="refreshChanges()">Refresh</button>
                 
                 <div id="tree-root"></div>
 
@@ -489,16 +489,23 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                 function toggleAllFiles(repoPath, type) {
                     const status = currentStatus.repositories[repoPath];
                     const files = type === 'versioned' ? status.versioned : status.unversioned;
-                    const repoFiles = selectedFiles.get(repoPath) || new Set();
+                    let repoFiles = selectedFiles.get(repoPath);
+                    
+                    if (!repoFiles) {
+                        repoFiles = new Set();
+                        selectedFiles.set(repoPath, repoFiles);
+                    }
+
                     const allSelected = files.every(file => repoFiles.has(file));
                     
                     if (allSelected) {
+                        // If all files are selected, unselect all
                         files.forEach(file => repoFiles.delete(file));
                     } else {
+                        // If not all files are selected, select all
                         files.forEach(file => repoFiles.add(file));
                     }
                     
-                    selectedFiles.set(repoPath, repoFiles);
                     updateView();
                 }
 
@@ -578,12 +585,19 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                     
                     const repoId = \`\${type}-\${repoPath}\`;
                     const repoName = repoPath.split('/').pop();
+                    const repoFiles = selectedFiles.get(repoPath) || new Set();
+                    const allSelected = files.every(file => repoFiles.has(file));
+                    
                     return \`
                         <div class="tree-node">
                             <div class="tree-content repo-node">
                                 <span id="toggle-\${repoId}" class="tree-toggle" onclick="toggleNode('\${repoId}')">▶</span>
-                                <span class="tree-label">\${repoName}</span>
-                                <span class="select-all" onclick="toggleAllFiles('\${repoPath}', '\${type}')">Select All</span>
+                                <div class="tree-label">
+                                    <input type="checkbox" 
+                                           onchange="toggleAllFiles('\${repoPath}', '\${type}')"
+                                           \${allSelected ? 'checked' : ''}>
+                                    \${repoName}
+                                </div>
                             </div>
                             <div id="children-\${repoId}" class="tree-children">
                                 \${files.map(file => createFileNode(repoPath, file, type)).join('')}
@@ -598,12 +612,12 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                         <div class="tree-node">
                             <div class="tree-content file-node \${type}">
                                 <span class="tree-toggle no-children"></span>
-                                <label class="tree-label">
+                                <div class="tree-label">
                                     <input type="checkbox" 
                                            onchange="toggleFile('\${repoPath}', '\${file}')"
                                            \${repoFiles.has(file) ? 'checked' : ''}>
                                     \${file}
-                                </label>
+                                </div>
                             </div>
                         </div>
                     \`;
