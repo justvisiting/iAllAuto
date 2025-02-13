@@ -8,14 +8,17 @@ function refreshChanges() {
 }
 
 function toggleNode(nodeId) {
+    console.log(`Toggling node: ${nodeId}`);
     const childrenElement = document.getElementById(`children-${nodeId}`);
     const toggleElement = document.getElementById(`toggle-${nodeId}`);
     
     if (childrenElement.classList.contains('expanded')) {
+        console.log(`Collapsing node: ${nodeId}`);
         childrenElement.classList.remove('expanded');
         toggleElement.textContent = '▶';
         expandedNodes.delete(nodeId);
     } else {
+        console.log(`Expanding node: ${nodeId}`);
         childrenElement.classList.add('expanded');
         toggleElement.textContent = '▼';
         expandedNodes.add(nodeId);
@@ -23,6 +26,7 @@ function toggleNode(nodeId) {
 }
 
 function toggleAllFiles(repoPath, type) {
+    console.log(`Toggling all files in repo: ${repoPath}, type: ${type}`);
     const status = currentStatus.repositories[repoPath];
     const files = type === 'versioned' ? status.versioned : status.unversioned;
     let repoFiles = selectedFiles.get(repoPath);
@@ -33,12 +37,13 @@ function toggleAllFiles(repoPath, type) {
     }
 
     const allSelected = files.every(file => repoFiles.has(file));
+    console.log(`All files selected: ${allSelected}`);
     
     if (allSelected) {
-        // If all files are selected, unselect all
+        console.log('Unselecting all files');
         files.forEach(file => repoFiles.delete(file));
     } else {
-        // If not all files are selected, select all
+        console.log('Selecting all files');
         files.forEach(file => repoFiles.add(file));
     }
     
@@ -46,6 +51,7 @@ function toggleAllFiles(repoPath, type) {
 }
 
 function toggleFile(repoPath, file) {
+    console.log(`Toggling file: ${file} in repo: ${repoPath}`);
     let repoFiles = selectedFiles.get(repoPath);
     if (!repoFiles) {
         repoFiles = new Set();
@@ -53,14 +59,68 @@ function toggleFile(repoPath, file) {
     }
 
     if (repoFiles.has(file)) {
+        console.log(`Unselecting file: ${file}`);
         repoFiles.delete(file);
     } else {
+        console.log(`Selecting file: ${file}`);
         repoFiles.add(file);
     }
+
+    // Update section checkbox state
+    const section = file.startsWith('.') ? 'unversioned' : 'tracking';
+    const sectionCheckbox = document.querySelector(`#toggle-${section}`).nextElementSibling;
+    const sectionFiles = document.querySelectorAll(`#children-${section} input[type="checkbox"]`);
+    const allChecked = Array.from(sectionFiles).every(box => box.checked);
+    console.log(`Section ${section} all files checked: ${allChecked}`);
+    sectionCheckbox.checked = allChecked;
+
     updateView();
 }
 
+function toggleAllInSection(sectionId) {
+    console.log(`Toggling all files in section: ${sectionId}`);
+    const checkbox = document.querySelector(`#toggle-${sectionId}`).nextElementSibling;
+    const isChecked = checkbox.checked;
+    console.log(`Section checkbox state: ${isChecked}`);
+
+    // Get all repositories for this section
+    const repos = Object.entries(currentStatus.repositories);
+    console.log(`Found ${repos.length} repositories`);
+
+    repos.forEach(([repoPath, status]) => {
+        let repoFiles = selectedFiles.get(repoPath);
+        if (!repoFiles) {
+            repoFiles = new Set();
+            selectedFiles.set(repoPath, repoFiles);
+        }
+
+        // Get files based on section
+        const files = sectionId === 'tracking' ? status.versioned : status.unversioned;
+        console.log(`Processing ${files.length} files for repo ${repoPath}`);
+
+        if (isChecked) {
+            // Select all files
+            files.forEach(file => repoFiles.add(file));
+        } else {
+            // Unselect all files
+            files.forEach(file => repoFiles.delete(file));
+        }
+    });
+
+    // Update all checkboxes in the section
+    const section = document.getElementById(`children-${sectionId}`);
+    const fileCheckboxes = section.querySelectorAll('input[type="checkbox"]');
+    console.log(`Updating ${fileCheckboxes.length} checkboxes`);
+    
+    fileCheckboxes.forEach(box => {
+        box.checked = isChecked;
+    });
+
+    updateCommitButton();
+}
+
 function updateView() {
+    console.log('Updating view with current status:', currentStatus);
     if (!currentStatus) return;
     
     const treeHtml = [];
@@ -88,6 +148,7 @@ function updateView() {
     }
     
     document.getElementById('tree-root').innerHTML = treeHtml.join('');
+    console.log('View updated');
     
     // Restore expanded state
     expandedNodes.forEach(nodeId => {
@@ -103,10 +164,12 @@ function updateView() {
 }
 
 function createRootNode(id, label, children) {
+    console.log(`Creating root node: id=${id}, label=${label}`);
     return `
         <div class="tree-node">
             <div class="tree-content root-node">
                 <span id="toggle-${id}" class="tree-toggle" onclick="toggleNode('${id}')">▶</span>
+                <input type="checkbox" onchange="toggleAllInSection('${id}')" class="section-checkbox">
                 <span class="tree-label">${label}</span>
             </div>
             <div id="children-${id}" class="tree-children">

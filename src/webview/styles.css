@@ -54,17 +54,19 @@ body {
 .tree-content {
     display: flex;
     align-items: center;
-    padding: 2px 0;
+    gap: 4px;
+    padding: 2px;
 }
 
 .tree-toggle {
+    cursor: pointer;
+    user-select: none;
     width: 16px;
     height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    user-select: none;
+    font-size: 10px;
     color: var(--vscode-foreground);
 }
 
@@ -73,8 +75,8 @@ body {
 }
 
 .tree-children {
-    margin-left: 16px;
     display: none;
+    margin-left: 16px;
 }
 
 .tree-children.expanded {
@@ -82,10 +84,9 @@ body {
 }
 
 .tree-label {
-    margin: 0;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     padding: 0;
 }
 
@@ -93,8 +94,12 @@ body {
     margin: 0;
 }
 
+.section-checkbox {
+    margin: 0 4px;
+}
+
 input[type="checkbox"] {
-    margin-right: 6px;
+    margin: 0;
 }
 
 .commit-view {
@@ -175,8 +180,7 @@ input[type="checkbox"] {
 
 .root-node {
     font-weight: bold;
-    margin: 0;
-    padding: 0;
     color: var(--vscode-sideBarTitle-foreground);
     background-color: var(--vscode-sideBarSectionHeader-background);
+    padding: 2px;
 }
