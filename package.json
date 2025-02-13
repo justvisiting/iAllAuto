@@ -1,25 +1,38 @@
 {
   "name": "iallauto",
   "displayName": "iAllAuto",
-  "description": "best in class git comitter and auto coder",
+  "description": "VS Code extension for managing Git repositories",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.97.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/justvisiting/iAllAuto"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "SCM Providers",
     "Other"
   ],
   "activationEvents": [
-    "onCommand:iallauto.showCommitView",
-    "onCommand:iallauto.refreshRepositories"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "iallAutoCommit",
+          "title": "Git Commit",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "scm": [
+        {
+          "type": "webview",
+          "id": "iallAutoCommitView",
+          "name": "Ch",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "iallauto.showCommitView",
@@ -30,48 +43,21 @@
         "command": "iallauto.refreshRepositories",
         "title": "Refresh Git Repositories",
         "category": "iAllAuto"
+      },
+      {
+        "command": "iallAutoCommit.refresh",
+        "title": "Refresh",
+        "icon": "$(sync)"
       }
     ],
-    "views": {
-      "scm": [
+    "menus": {
+      "view/title": [
         {
-          "id": "iallAutoCommitView",
-          "name": "Commit Changes",
-          "type": "webview"
+          "command": "iallAutoCommit.refresh",
+          "when": "view == iallAutoCommitView",
+          "group": "navigation"
         }
       ]
-    },
-    "configuration": {
-      "title": "iAllAuto",
-      "properties": {
-        "iallauto.git.baseFolders": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "List of base folders to scan for Git repositories. Environment variables like $HOME are supported."
-        },
-        "iallauto.git.ignoredFolders": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": ["node_modules", "out", "typings", "test"],
-          "description": "List of folders to ignore when scanning for Git repositories. Supports glob patterns."
-        },
-        "iallauto.git.maxDepth": {
-          "type": "number",
-          "default": 2,
-          "description": "Maximum depth to scan for Git repositories in subfolders."
-        },
-        "iallauto.git.scanMode": {
-          "type": "string",
-          "enum": ["workspace", "custom", "both"],
-          "default": "workspace",
-          "description": "How to scan for Git repositories: 'workspace' (only workspace folders), 'custom' (only baseFolders), or 'both'."
-        }
-      }
     }
   },
   "scripts": {
@@ -79,22 +65,21 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
+    "lint": "eslint src --ext ts",
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
-    "@types/vscode": "^1.97.0",
-    "@typescript-eslint/eslint-plugin": "^8.22.0",
-    "@typescript-eslint/parser": "^8.22.0",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^3.2.2",
-    "eslint": "^9.19.0",
-    "typescript": "^5.7.3"
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
-    "simple-git": "^3.27.0"
+    "simple-git": "^3.22.0"
   }
 }

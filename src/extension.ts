@@ -12,162 +12,51 @@ interface GitRepositoryConfig {
     scanMode?: 'workspace' | 'custom' | 'both';
 }
 
-async function findGitRepositories(): Promise<string[]> {
-    const config = vscode.workspace.getConfiguration('iallauto.git');
-    const settings: GitRepositoryConfig = {
-        baseFolders: config.get('baseFolders'),
-        ignoredFolders: config.get('ignoredFolders', ['node_modules', 'out', 'typings', 'test']),
-        maxDepth: config.get('maxDepth', 2),
-        scanMode: config.get('scanMode', 'workspace')
-    };
-
+async function scanForGitRepos(directory: string, maxDepth: number = 3): Promise<string[]> {
     const repositories: Set<string> = new Set();
-    const pathsToScan: Set<string> = new Set();
-
-    // 1. Get all open text document paths
-    const openDocs = vscode.workspace.textDocuments
-        .filter(doc => doc.uri.scheme === 'file' && !doc.isUntitled)
-        .map(doc => path.dirname(doc.uri.fsPath))
-        .filter(isValidPath);
-
-    // Add all unique parent directories of open files (up to 3 levels up)
-    for (const docPath of openDocs) {
-        let currentPath = docPath;
-        for (let i = 0; i < 3; i++) {
-            if (isValidPath(currentPath)) {
-                pathsToScan.add(currentPath);
-            }
-            const parentPath = path.dirname(currentPath);
-            if (parentPath === currentPath) break;
-            currentPath = parentPath;
-        }
-    }
-
-    // 2. Add workspace folders if enabled
-    if (settings.scanMode !== 'custom') {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders) {
-            workspaceFolders
-                .map(folder => folder.uri.fsPath)
-                .filter(isValidPath)
-                .forEach(path => pathsToScan.add(path));
-        }
-    }
-
-    // 3. Add custom base folders if configured
-    if (settings.scanMode !== 'workspace' && settings.baseFolders && settings.baseFolders.length > 0) {
-        settings.baseFolders
-            .map(expandPath)
-            .filter(isValidPath)
-            .forEach(path => pathsToScan.add(path));
-    }
-
-    // Log scanning paths for debugging
-    console.log('Paths to scan:', Array.from(pathsToScan));
-
-    // If no valid paths found, show configuration message
-    if (pathsToScan.size === 0) {
-        vscode.window.showWarningMessage(
-            'No valid workspace or repository paths found. Would you like to configure repository paths?',
-            'Configure Now'
-        ).then(selection => {
-            if (selection === 'Configure Now') {
-                vscode.commands.executeCommand('workbench.action.openSettings', 'iallauto.git.baseFolders');
-            }
-        });
-        return [];
-    }
-
-    // Scan all valid paths for repositories
-    for (const dirPath of pathsToScan) {
+    
+    async function scan(dir: string, depth: number) {
+        if (depth > maxDepth) return;
+        
         try {
-            // Quick check if this path itself is a git repo
-            const git = simpleGit(dirPath);
+            // Check if current directory is a git repo
+            const git = simpleGit(dir);
             const isRepo = await git.checkIsRepo();
             if (isRepo) {
-                repositories.add(dirPath);
-                continue; // No need to scan subdirectories if this is already a repo
+                repositories.add(dir);
+                return; // Don't scan subdirectories of a git repo
             }
 
-            // If not a repo, scan subdirectories
-            await scanDirectory(dirPath, 0, settings, repositories);
+            // Read directory contents
+            const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+            
+            // Scan subdirectories
+            for (const [name, type] of entries) {
+                if (type === vscode.FileType.Directory && name !== 'node_modules' && name !== '.git') {
+                    await scan(path.join(dir, name), depth + 1);
+                }
+            }
         } catch (error) {
-            console.error(`Error scanning directory ${dirPath}:`, error);
+            console.log(`Error scanning directory ${dir}:`, error);
         }
     }
 
-    // Sort repositories by path length (shorter paths first)
-    return Array.from(repositories).sort((a, b) => a.length - b.length);
+    await scan(directory, 0);
+    return Array.from(repositories);
 }
 
-function isValidPath(p: string): boolean {
-    // Don't allow root directory or very short paths
-    if (p === '/' || p === '\\' || p.length < 3) {
-        return false;
+export async function findGitRepositories(): Promise<string[]> {
+    const repositories: Set<string> = new Set();
+
+    // Get workspace folders
+    if (vscode.workspace.workspaceFolders) {
+        for (const folder of vscode.workspace.workspaceFolders) {
+            const repos = await scanForGitRepos(folder.uri.fsPath);
+            repos.forEach(repo => repositories.add(repo));
+        }
     }
 
-    try {
-        // Check if path exists and is a directory
-        return require('fs').statSync(p).isDirectory();
-    } catch (error) {
-        return false;
-    }
-}
-
-function expandPath(p: string): string {
-    // Handle environment variables
-    const expanded = p.replace(/\$([A-Za-z0-9_]+)/g, (_, name) => process.env[name] || '');
-    
-    // Handle home directory shorthand
-    if (expanded.startsWith('~/')) {
-        return path.join(process.env.HOME || process.env.USERPROFILE || '', expanded.slice(2));
-    }
-
-    return expanded;
-}
-
-async function scanDirectory(
-    directory: string,
-    depth: number,
-    config: GitRepositoryConfig,
-    repositories: Set<string>
-): Promise<void> {
-    try {
-        // Check depth limit
-        if (depth > (config.maxDepth || 2)) {
-            return;
-        }
-
-        // Check if directory should be ignored
-        const dirName = path.basename(directory);
-        if (config.ignoredFolders?.some(pattern => {
-            if (pattern.includes('*')) {
-                return new RegExp('^' + pattern.replace(/\*/g, '.*') + '$').test(dirName);
-            }
-            return pattern === dirName;
-        })) {
-            return;
-        }
-
-        // Check if directory is a git repository
-        const git = simpleGit(directory);
-        const isRepo = await git.checkIsRepo();
-        if (isRepo) {
-            repositories.add(directory);
-            // Don't scan deeper if we found a repository
-            return;
-        }
-
-        // Scan subdirectories
-        const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(directory));
-        for (const [name, type] of entries) {
-            if (type === vscode.FileType.Directory) {
-                await scanDirectory(path.join(directory, name), depth + 1, config, repositories);
-            }
-        }
-    } catch (error) {
-        console.error(`Error scanning directory ${directory}:`, error);
-    }
+    return Array.from(repositories);
 }
 
 interface GitFileStatus {
@@ -189,17 +78,32 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _gitRepos: Map<string, SimpleGit> = new Map();
     private _extensionPath: string;
+    private _repositories: string[];
 
     constructor(
         extensionPath: string,
         private readonly _extensionUri: vscode.Uri,
-        private readonly _repositories: string[]
+        repositories: string[]
     ) {
         this._extensionPath = extensionPath;
+        this._repositories = repositories;
         // Initialize git for each repository
-        for (const repoPath of _repositories) {
+        for (const repoPath of repositories) {
             this._gitRepos.set(repoPath, simpleGit(repoPath));
         }
+    }
+
+    public refresh() {
+        this._updateChanges();
+    }
+
+    public updateRepositories(repositories: string[]) {
+        this._repositories = repositories;
+        this._gitRepos.clear();
+        for (const repoPath of repositories) {
+            this._gitRepos.set(repoPath, simpleGit(repoPath));
+        }
+        this._updateChanges();
     }
 
     public async resolveWebviewView(
@@ -363,32 +267,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Activating iAllAuto extension...');
-
-    // Register commands first
-    const showCommitViewCommand = vscode.commands.registerCommand('iallauto.showCommitView', () => {
-        vscode.commands.executeCommand('workbench.view.scm');
-    });
-
-    const refreshReposCommand = vscode.commands.registerCommand('iallauto.refreshRepositories', async () => {
-        try {
-            const repos = await findGitRepositories();
-            if (repos.length > 0) {
-                vscode.window.showInformationMessage(
-                    `Found ${repos.length} Git ${repos.length === 1 ? 'repository' : 'repositories'}`
-                );
-            }
-            return repos;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('Error refreshing repositories:', error);
-            vscode.window.showErrorMessage('Failed to refresh repositories: ' + errorMessage);
-            return [];
-        }
-    });
-
-    // Add commands to subscriptions immediately
-    context.subscriptions.push(showCommitViewCommand, refreshReposCommand);
+    console.log('Extension "iAllAuto" is now active.');
 
     // Initialize repositories and provider
     findGitRepositories().then(repositories => {
@@ -397,14 +276,7 @@ export function activate(context: vscode.ExtensionContext) {
         console.log('=======================');
 
         if (repositories.length === 0) {
-            vscode.window.showWarningMessage(
-                'No Git repositories found. Please open a workspace or configure base folders in settings.',
-                'Configure Settings'
-            ).then(selection => {
-                if (selection === 'Configure Settings') {
-                    vscode.commands.executeCommand('workbench.action.openSettings', 'iallauto.git');
-                }
-            });
+            vscode.window.showWarningMessage('No Git repositories found in workspace.');
             return;
         }
 
@@ -412,15 +284,21 @@ export function activate(context: vscode.ExtensionContext) {
             const provider = new CommitViewProvider(context.extensionPath, context.extensionUri, repositories);
             const providerRegistration = vscode.window.registerWebviewViewProvider('iallAutoCommitView', provider);
             context.subscriptions.push(providerRegistration);
+
+            // Register refresh command
+            const refreshCommand = vscode.commands.registerCommand('iallAutoCommit.refresh', async () => {
+                const updatedRepos = await findGitRepositories();
+                provider.updateRepositories(updatedRepos);
+            });
+            context.subscriptions.push(refreshCommand);
+
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('Error creating commit view provider:', error);
-            vscode.window.showErrorMessage('Failed to initialize commit view: ' + errorMessage);
+            console.error('Error activating extension:', error);
+            vscode.window.showErrorMessage('Error activating extension: ' + error);
         }
     }).catch(error => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error('Error during activation:', error);
-        vscode.window.showErrorMessage('Failed to initialize extension: ' + errorMessage);
+        vscode.window.showErrorMessage('Error activating extension: ' + error);
     });
 }
 

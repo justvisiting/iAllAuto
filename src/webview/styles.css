@@ -3,14 +3,59 @@ body {
     color: var(--vscode-foreground);
     font-family: var(--vscode-font-family);
 }
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+    margin-bottom: 10px;
+    background-color: var(--vscode-sideBarSectionHeader-background);
+}
+
+.header-title {
+    margin: 0;
+    padding: 8px 0;
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+    color: var(--vscode-sideBarTitle-foreground);
+}
+
+.icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    border: none;
+    background: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.icon-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.icon-button svg {
+    width: 16px;
+    height: 16px;
+}
+
 .tree-node {
     margin: 2px 0;
+    padding: 4px 0;
 }
+
 .tree-content {
     display: flex;
     align-items: center;
     padding: 2px 0;
 }
+
 .tree-toggle {
     width: 16px;
     height: 16px;
@@ -21,20 +66,36 @@ body {
     user-select: none;
     color: var(--vscode-foreground);
 }
+
 .tree-toggle.no-children {
     visibility: hidden;
 }
+
 .tree-children {
     margin-left: 16px;
     display: none;
 }
+
 .tree-children.expanded {
     display: block;
 }
+
 .tree-label {
     margin-left: 4px;
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
+
+.tree-label input[type="checkbox"] {
+    margin: 0;
+}
+
+input[type="checkbox"] {
+    margin-right: 6px;
+}
+
 .root-node {
     font-weight: bold;
     color: var(--vscode-sideBarTitle-foreground);
@@ -42,60 +103,65 @@ body {
     padding: 6px;
     margin: 10px 0;
 }
+
 .repo-node {
     font-weight: bold;
     color: var(--vscode-descriptionForeground);
     padding: 4px 0;
 }
+
 .file-node {
     color: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
+
 .file-node.unversioned {
     color: var(--vscode-gitDecoration-untrackedResourceForeground);
 }
-.select-all {
-    margin-left: auto;
-    color: var(--vscode-textLink-foreground);
-    cursor: pointer;
-    font-size: 0.9em;
+
+.commit-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
 }
-.select-all:hover {
-    text-decoration: underline;
+
+#tree-root {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 10px;
 }
+
 .commit-input {
     width: 100%;
     min-height: 60px;
     margin: 10px 0;
     padding: 8px;
+    border: 1px solid var(--vscode-input-border);
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border);
     resize: vertical;
 }
+
 .commit-button {
+    width: 100%;
+    padding: 8px;
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
-    padding: 8px 16px;
     cursor: pointer;
 }
+
 .commit-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
-.refresh-button {
-    background-color: transparent;
-    border: 1px solid var(--vscode-button-border);
-    color: var(--vscode-button-foreground);
-    padding: 4px 8px;
-    cursor: pointer;
-    float: right;
+
+.commit-button:not(:disabled):hover {
+    background-color: var(--vscode-button-hoverBackground);
 }
+
 .empty-message {
     color: var(--vscode-descriptionForeground);
     font-style: italic;
     padding: 4px 20px;
-}
-input[type="checkbox"] {
-    margin-right: 6px;
 }
