@@ -86,6 +86,7 @@ body {
     display: flex;
     align-items: center;
     gap: 2px;
+    padding: 0;
 }
 
 .tree-label input[type="checkbox"] {
@@ -96,11 +97,16 @@ input[type="checkbox"] {
     margin-right: 6px;
 }
 
-.root-node {
-    font-weight: bold;
-    color: var(--vscode-sideBarTitle-foreground);
-    background-color: var(--vscode-sideBarSectionHeader-background);
-    padding: 6px;
+.commit-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+#tree-root {
+    flex: 1;
+    overflow-y: auto;
     margin: 0;
 }
 
@@ -118,24 +124,11 @@ input[type="checkbox"] {
     color: var(--vscode-gitDecoration-untrackedResourceForeground);
 }
 
-.commit-view {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-}
-
-#tree-root {
-    flex: 1;
-    overflow-y: auto;
-    margin: 0;
-}
-
 .commit-input {
     width: 100%;
     min-height: 60px;
     margin: 0;
-    padding: 4px;
+    padding: 2px 0;
     border: 1px solid var(--vscode-input-border);
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
@@ -144,7 +137,7 @@ input[type="checkbox"] {
 
 .commit-button {
     width: 100%;
-    padding: 4px;
+    padding: 2px 0;
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
@@ -164,7 +157,7 @@ input[type="checkbox"] {
     color: var(--vscode-descriptionForeground);
     font-style: italic;
     margin: 0;
-    padding: 4px;
+    padding: 2px 0;
 }
 
 /* Git status colors */
@@ -178,4 +171,12 @@ input[type="checkbox"] {
 
 .status-untracked {
     color: var(--vscode-gitDecoration-untrackedResourceForeground);
+}
+
+.root-node {
+    font-weight: bold;
+    margin: 0;
+    padding: 0;
+    color: var(--vscode-sideBarTitle-foreground);
+    background-color: var(--vscode-sideBarSectionHeader-background);
 }
