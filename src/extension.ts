@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { simpleGit, SimpleGit } from 'simple-git';
 
 interface GitRepositoryConfig {
@@ -187,11 +188,14 @@ interface GitStatus {
 class CommitViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _gitRepos: Map<string, SimpleGit> = new Map();
+    private _extensionPath: string;
 
     constructor(
+        extensionPath: string,
         private readonly _extensionUri: vscode.Uri,
         private readonly _repositories: string[]
     ) {
+        this._extensionPath = extensionPath;
         // Initialize git for each repository
         for (const repoPath of _repositories) {
             this._gitRepos.set(repoPath, simpleGit(repoPath));
@@ -342,323 +346,19 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _getHtmlForWebview(webview: vscode.Webview) {
-        return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Git Commit</title>
-            <style>
-                body {
-                    padding: 10px;
-                    color: var(--vscode-foreground);
-                    font-family: var(--vscode-font-family);
-                }
-                .tree-node {
-                    margin: 2px 0;
-                }
-                .tree-content {
-                    display: flex;
-                    align-items: center;
-                    padding: 2px 0;
-                }
-                .tree-toggle {
-                    width: 16px;
-                    height: 16px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    cursor: pointer;
-                    user-select: none;
-                    color: var(--vscode-foreground);
-                }
-                .tree-toggle.no-children {
-                    visibility: hidden;
-                }
-                .tree-children {
-                    margin-left: 16px;
-                    display: none;
-                }
-                .tree-children.expanded {
-                    display: block;
-                }
-                .tree-label {
-                    margin-left: 4px;
-                    flex: 1;
-                }
-                .root-node {
-                    font-weight: bold;
-                    color: var(--vscode-sideBarTitle-foreground);
-                    background-color: var(--vscode-sideBarSectionHeader-background);
-                    padding: 6px;
-                    margin: 10px 0;
-                }
-                .repo-node {
-                    font-weight: bold;
-                    color: var(--vscode-descriptionForeground);
-                    padding: 4px 0;
-                }
-                .file-node {
-                    color: var(--vscode-gitDecoration-modifiedResourceForeground);
-                }
-                .file-node.unversioned {
-                    color: var(--vscode-gitDecoration-untrackedResourceForeground);
-                }
-                .select-all {
-                    margin-left: auto;
-                    color: var(--vscode-textLink-foreground);
-                    cursor: pointer;
-                    font-size: 0.9em;
-                }
-                .select-all:hover {
-                    text-decoration: underline;
-                }
-                .commit-input {
-                    width: 100%;
-                    min-height: 60px;
-                    margin: 10px 0;
-                    padding: 8px;
-                    background-color: var(--vscode-input-background);
-                    color: var(--vscode-input-foreground);
-                    border: 1px solid var(--vscode-input-border);
-                    resize: vertical;
-                }
-                .commit-button {
-                    background-color: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    padding: 8px 16px;
-                    cursor: pointer;
-                }
-                .commit-button:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-                .refresh-button {
-                    background-color: transparent;
-                    border: 1px solid var(--vscode-button-border);
-                    color: var(--vscode-button-foreground);
-                    padding: 4px 8px;
-                    cursor: pointer;
-                    float: right;
-                }
-                .empty-message {
-                    color: var(--vscode-descriptionForeground);
-                    font-style: italic;
-                    padding: 4px 20px;
-                }
-                input[type="checkbox"] {
-                    margin-right: 6px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="commit-view">
-                <button class="refresh-button" onclick="refreshChanges()">Refresh</button>
-                
-                <div id="tree-root"></div>
+        const htmlPath = path.join(this._extensionPath, 'src', 'webview', 'commit-view.html');
+        const cssPath = path.join(this._extensionPath, 'src', 'webview', 'styles.css');
+        const jsPath = path.join(this._extensionPath, 'src', 'webview', 'script.js');
 
-                <textarea id="commit-message" class="commit-input" placeholder="Commit message"></textarea>
-                <button id="commit-button" class="commit-button" onclick="commitChanges()" disabled>Commit</button>
-            </div>
-            <script>
-                const vscode = acquireVsCodeApi();
-                let selectedFiles = new Map(); // Map<string, Set<string>> - repo -> files
-                let currentStatus = null;
-                let expandedNodes = new Set();
+        let html = await fs.promises.readFile(htmlPath, 'utf8');
+        const css = await fs.promises.readFile(cssPath, 'utf8');
+        const js = await fs.promises.readFile(jsPath, 'utf8');
 
-                function refreshChanges() {
-                    vscode.postMessage({ type: 'refresh' });
-                }
+        // Replace placeholders with actual content
+        html = html.replace('/* Content will be replaced with styles.css */', css);
+        html = html.replace('/* Content will be replaced with script.js */', js);
 
-                function toggleNode(nodeId) {
-                    const childrenElement = document.getElementById(\`children-\${nodeId}\`);
-                    const toggleElement = document.getElementById(\`toggle-\${nodeId}\`);
-                    
-                    if (childrenElement.classList.contains('expanded')) {
-                        childrenElement.classList.remove('expanded');
-                        toggleElement.textContent = '▶';
-                        expandedNodes.delete(nodeId);
-                    } else {
-                        childrenElement.classList.add('expanded');
-                        toggleElement.textContent = '▼';
-                        expandedNodes.add(nodeId);
-                    }
-                }
-
-                function toggleAllFiles(repoPath, type) {
-                    const status = currentStatus.repositories[repoPath];
-                    const files = type === 'versioned' ? status.versioned : status.unversioned;
-                    let repoFiles = selectedFiles.get(repoPath);
-                    
-                    if (!repoFiles) {
-                        repoFiles = new Set();
-                        selectedFiles.set(repoPath, repoFiles);
-                    }
-
-                    const allSelected = files.every(file => repoFiles.has(file));
-                    
-                    if (allSelected) {
-                        // If all files are selected, unselect all
-                        files.forEach(file => repoFiles.delete(file));
-                    } else {
-                        // If not all files are selected, select all
-                        files.forEach(file => repoFiles.add(file));
-                    }
-                    
-                    updateView();
-                }
-
-                function toggleFile(repoPath, file) {
-                    let repoFiles = selectedFiles.get(repoPath);
-                    if (!repoFiles) {
-                        repoFiles = new Set();
-                        selectedFiles.set(repoPath, repoFiles);
-                    }
-
-                    if (repoFiles.has(file)) {
-                        repoFiles.delete(file);
-                    } else {
-                        repoFiles.add(file);
-                    }
-                    updateView();
-                }
-
-                function updateView() {
-                    if (!currentStatus) return;
-                    
-                    const treeHtml = [];
-                    
-                    // Create versioned files tree
-                    const versionedRepos = Object.entries(currentStatus.repositories)
-                        .filter(([_, status]) => status.versioned.length > 0)
-                        .map(([repoPath, status]) => 
-                            createRepoNode(repoPath, status.versioned, 'versioned'))
-                        .join('');
-                    
-                    if (versionedRepos) {
-                        treeHtml.push(createRootNode('tracking', 'Tracking', versionedRepos));
-                    }
-                    
-                    // Create unversioned files tree
-                    const unversionedRepos = Object.entries(currentStatus.repositories)
-                        .filter(([_, status]) => status.unversioned.length > 0)
-                        .map(([repoPath, status]) => 
-                            createRepoNode(repoPath, status.unversioned, 'unversioned'))
-                        .join('');
-                    
-                    if (unversionedRepos) {
-                        treeHtml.push(createRootNode('unversioned', 'Unversioned Files', unversionedRepos));
-                    }
-                    
-                    document.getElementById('tree-root').innerHTML = treeHtml.join('');
-                    
-                    // Restore expanded state
-                    expandedNodes.forEach(nodeId => {
-                        const childrenElement = document.getElementById(\`children-\${nodeId}\`);
-                        const toggleElement = document.getElementById(\`toggle-\${nodeId}\`);
-                        if (childrenElement && toggleElement) {
-                            childrenElement.classList.add('expanded');
-                            toggleElement.textContent = '▼';
-                        }
-                    });
-                    
-                    updateCommitButton();
-                }
-
-                function createRootNode(id, label, children) {
-                    return \`
-                        <div class="tree-node">
-                            <div class="tree-content root-node">
-                                <span id="toggle-\${id}" class="tree-toggle" onclick="toggleNode('\${id}')">▶</span>
-                                <span class="tree-label">\${label}</span>
-                            </div>
-                            <div id="children-\${id}" class="tree-children">
-                                \${children || '<div class="empty-message">No files</div>'}
-                            </div>
-                        </div>
-                    \`;
-                }
-
-                function createRepoNode(repoPath, files, type) {
-                    if (!files || files.length === 0) return '';
-                    
-                    const repoId = \`\${type}-\${repoPath}\`;
-                    const repoName = repoPath.split('/').pop();
-                    const repoFiles = selectedFiles.get(repoPath) || new Set();
-                    const allSelected = files.every(file => repoFiles.has(file));
-                    
-                    return \`
-                        <div class="tree-node">
-                            <div class="tree-content repo-node">
-                                <span id="toggle-\${repoId}" class="tree-toggle" onclick="toggleNode('\${repoId}')">▶</span>
-                                <div class="tree-label">
-                                    <input type="checkbox" 
-                                           onchange="toggleAllFiles('\${repoPath}', '\${type}')"
-                                           \${allSelected ? 'checked' : ''}>
-                                    \${repoName}
-                                </div>
-                            </div>
-                            <div id="children-\${repoId}" class="tree-children">
-                                \${files.map(file => createFileNode(repoPath, file, type)).join('')}
-                            </div>
-                        </div>
-                    \`;
-                }
-
-                function createFileNode(repoPath, file, type) {
-                    const repoFiles = selectedFiles.get(repoPath) || new Set();
-                    return \`
-                        <div class="tree-node">
-                            <div class="tree-content file-node \${type}">
-                                <span class="tree-toggle no-children"></span>
-                                <div class="tree-label">
-                                    <input type="checkbox" 
-                                           onchange="toggleFile('\${repoPath}', '\${file}')"
-                                           \${repoFiles.has(file) ? 'checked' : ''}>
-                                    \${file}
-                                </div>
-                            </div>
-                        </div>
-                    \`;
-                }
-
-                function updateCommitButton() {
-                    const message = document.getElementById('commit-message').value;
-                    const hasFiles = Array.from(selectedFiles.values())
-                        .some(files => files.size > 0);
-                    document.getElementById('commit-button').disabled = !message || !hasFiles;
-                }
-
-                function commitChanges() {
-                    const message = document.getElementById('commit-message').value;
-                    const files = [];
-                    for (const [repo, fileSet] of selectedFiles.entries()) {
-                        for (const file of fileSet) {
-                            files.push({ repo, path: file });
-                        }
-                    }
-                    vscode.postMessage({
-                        type: 'commit',
-                        message,
-                        files
-                    });
-                }
-
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    switch (message.type) {
-                        case 'updateChanges':
-                            currentStatus = message.status;
-                            updateView();
-                            break;
-                    }
-                });
-
-                document.getElementById('commit-message').addEventListener('input', updateCommitButton);
-            </script>
-        </body>
-        </html>`;
+        return html;
     }
 }
 
@@ -709,7 +409,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         try {
-            const provider = new CommitViewProvider(context.extensionUri, repositories);
+            const provider = new CommitViewProvider(context.extensionPath, context.extensionUri, repositories);
             const providerRegistration = vscode.window.registerWebviewViewProvider('iallAutoCommitView', provider);
             context.subscriptions.push(providerRegistration);
         } catch (error) {

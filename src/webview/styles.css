@@ -1,0 +1,101 @@
+body {
+    padding: 10px;
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+}
+.tree-node {
+    margin: 2px 0;
+}
+.tree-content {
+    display: flex;
+    align-items: center;
+    padding: 2px 0;
+}
+.tree-toggle {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    color: var(--vscode-foreground);
+}
+.tree-toggle.no-children {
+    visibility: hidden;
+}
+.tree-children {
+    margin-left: 16px;
+    display: none;
+}
+.tree-children.expanded {
+    display: block;
+}
+.tree-label {
+    margin-left: 4px;
+    flex: 1;
+}
+.root-node {
+    font-weight: bold;
+    color: var(--vscode-sideBarTitle-foreground);
+    background-color: var(--vscode-sideBarSectionHeader-background);
+    padding: 6px;
+    margin: 10px 0;
+}
+.repo-node {
+    font-weight: bold;
+    color: var(--vscode-descriptionForeground);
+    padding: 4px 0;
+}
+.file-node {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+.file-node.unversioned {
+    color: var(--vscode-gitDecoration-untrackedResourceForeground);
+}
+.select-all {
+    margin-left: auto;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+.select-all:hover {
+    text-decoration: underline;
+}
+.commit-input {
+    width: 100%;
+    min-height: 60px;
+    margin: 10px 0;
+    padding: 8px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    resize: vertical;
+}
+.commit-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+}
+.commit-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.refresh-button {
+    background-color: transparent;
+    border: 1px solid var(--vscode-button-border);
+    color: var(--vscode-button-foreground);
+    padding: 4px 8px;
+    cursor: pointer;
+    float: right;
+}
+.empty-message {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    padding: 4px 20px;
+}
+input[type="checkbox"] {
+    margin-right: 6px;
+}
