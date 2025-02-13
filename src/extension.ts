@@ -203,6 +203,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
     ) {
+        console.log('Resolving webview view...');
         this._view = webviewView;
 
         webviewView.webview.options = {
@@ -214,6 +215,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
+            console.log('Received message from webview:', data);
             switch (data.type) {
                 case 'refresh':
                     await this._updateChanges();
@@ -225,6 +227,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         });
 
         // Initial update
+        console.log('Performing initial update...');
         await this._updateChanges();
     }
 
@@ -237,19 +240,13 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         try {
             console.log('Updating changes...');
             const status = await this._getGitStatus();
-            console.log('Got status:', status);
-            
-            // Check if we have any changes
-            const hasChanges = Object.values(status.repositories).some(repo => 
-                repo.versioned.length > 0 || repo.unversioned.length > 0
-            );
-            
-            console.log('Has changes:', hasChanges);
+            console.log('Got git status:', status);
 
             this._view.webview.postMessage({
                 type: 'updateChanges',
                 status
             });
+            console.log('Posted updateChanges message to webview');
         } catch (error) {
             console.error('Failed to update changes:', error);
             vscode.window.showErrorMessage('Failed to update changes: ' + (error instanceof Error ? error.message : String(error)));
@@ -264,7 +261,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
             try {
                 console.log(`Getting status for repo: ${repoPath}`);
                 const status = await git.status();
-                console.log(`Status for ${repoPath}:`, status);
+                console.log(`Raw status for ${repoPath}:`, status);
                 
                 // All versioned files with changes
                 const versioned = [
@@ -290,6 +287,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
             }
         }
 
+        console.log('Final git status:', { repositories });
         return { repositories };
     }
 
