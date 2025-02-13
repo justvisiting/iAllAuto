@@ -66,8 +66,9 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
     color: var(--vscode-foreground);
+    font-size: 16px;
+    margin-right: 2px;
 }
 
 .tree-toggle.no-children {

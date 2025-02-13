@@ -15,12 +15,12 @@ function toggleNode(nodeId) {
     if (childrenElement.classList.contains('expanded')) {
         console.log(`Collapsing node: ${nodeId}`);
         childrenElement.classList.remove('expanded');
-        toggleElement.textContent = '▶';
+        toggleElement.className = 'tree-toggle codicon codicon-chevron-right';
         expandedNodes.delete(nodeId);
     } else {
         console.log(`Expanding node: ${nodeId}`);
         childrenElement.classList.add('expanded');
-        toggleElement.textContent = '▼';
+        toggleElement.className = 'tree-toggle codicon codicon-chevron-down';
         expandedNodes.add(nodeId);
     }
 }
@@ -178,7 +178,7 @@ function updateView() {
         const toggleElement = document.getElementById(`toggle-${nodeId}`);
         if (childrenElement && toggleElement) {
             childrenElement.classList.add('expanded');
-            toggleElement.textContent = '▼';
+            toggleElement.className = 'tree-toggle codicon codicon-chevron-down';
         }
     });
 
@@ -194,7 +194,7 @@ function createRootNode(id, label, children) {
     return `
         <div class="tree-node">
             <div class="tree-content root-node">
-                <span id="toggle-${id}" class="tree-toggle" onclick="toggleNode('${id}')">▶</span>
+                <span id="toggle-${id}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${id}')"></span>
                 <input type="checkbox" onchange="toggleAllInSection('${id}')" class="section-checkbox">
                 <span class="tree-label">${label}</span>
             </div>
@@ -216,7 +216,7 @@ function createRepoNode(repoPath, files, type) {
     return `
         <div class="tree-node">
             <div class="tree-content repo-node">
-                <span id="toggle-${repoId}" class="tree-toggle" onclick="toggleNode('${repoId}')">▶</span>
+                <span id="toggle-${repoId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${repoId}')"></span>
                 <div class="tree-label">
                     <input type="checkbox" 
                            onchange="toggleAllFiles('${repoPath}', '${type}')"
