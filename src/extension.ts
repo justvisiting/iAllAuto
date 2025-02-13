@@ -169,56 +169,36 @@ async function scanDirectory(
     }
 }
 
+interface GitFileStatus {
+    path: string;
+    repoPath: string;
+    isVersioned: boolean;
+}
+
+interface GitStatus {
+    repositories: {
+        [repoPath: string]: {
+            versioned: string[];
+            unversioned: string[];
+        }
+    };
+}
+
 class CommitViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
-    private _git?: SimpleGit;
-    private _isGitRepo: boolean = false;
+    private _gitRepos: Map<string, SimpleGit> = new Map();
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
-        private readonly _workspaceRoot: string
+        private readonly _repositories: string[]
     ) {
-        this.initGit();
-    }
-
-    private async initGit() {
-        try {
-            if (!this._workspaceRoot) {
-                console.log('No workspace root available');
-                return;
-            }
-
-            // Initialize simple-git
-            this._git = simpleGit(this._workspaceRoot);
-            
-            // Check if it's a git repository
-            const isRepo = await this._git.checkIsRepo();
-            if (!isRepo) {
-                console.log('Not a git repository:', this._workspaceRoot);
-                this._isGitRepo = false;
-                if (this._view) {
-                    this._view.webview.html = this._getNotGitRepoHtml();
-                }
-                return;
-            }
-
-            this._isGitRepo = true;
-            console.log('Git repository initialized at:', this._workspaceRoot);
-            
-            // Initial refresh if view exists
-            if (this._view) {
-                this.refreshChanges();
-            }
-        } catch (error) {
-            console.error('Failed to initialize git:', error);
-            this._isGitRepo = false;
-            if (this._view) {
-                this._view.webview.html = this._getNotGitRepoHtml();
-            }
+        // Initialize git for each repository
+        for (const repoPath of _repositories) {
+            this._gitRepos.set(repoPath, simpleGit(repoPath));
         }
     }
 
-    public resolveWebviewView(
+    public async resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
@@ -227,271 +207,429 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [
-                this._extensionUri
-            ]
+            localResourceRoots: [this._extensionUri]
         };
 
-        if (!this._isGitRepo) {
-            webviewView.webview.html = this._getNotGitRepoHtml();
-            return;
-        }
-
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        webviewView.webview.html = await this._getHtmlForWebview(webviewView.webview);
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
-            if (!this._git || !this._isGitRepo) {
-                vscode.window.showErrorMessage('Not a git repository');
-                return;
-            }
-
             switch (data.type) {
-                case 'commit':
-                    try {
-                        await this._git.add('./*');
-                        await this._git.commit(data.message);
-                        vscode.window.showInformationMessage('Changes committed successfully!');
-                        this.refreshChanges();
-                    } catch (error) {
-                        vscode.window.showErrorMessage('Failed to commit changes: ' + error);
-                    }
-                    break;
                 case 'refresh':
-                    this.refreshChanges();
+                    await this._updateChanges();
                     break;
-                case 'init':
-                    try {
-                        await this._git.init();
-                        this._isGitRepo = true;
-                        vscode.window.showInformationMessage('Git repository initialized successfully!');
-                        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-                        this.refreshChanges();
-                    } catch (error) {
-                        vscode.window.showErrorMessage('Failed to initialize git repository: ' + error);
-                    }
+                case 'commit':
+                    await this._commitChanges(data.message, data.files);
                     break;
             }
         });
 
-        // Initial refresh
-        this.refreshChanges();
+        // Initial update
+        await this._updateChanges();
     }
 
-    private async refreshChanges() {
-        if (!this._view || !this._git || !this._isGitRepo) {
-            return;
-        }
-
+    private async _updateChanges() {
         try {
-            const status = await this._git.status();
-            const changes = {
-                staged: status.staged,
-                modified: status.modified,
-                untracked: status.not_added
-            };
-
-            this._view.webview.postMessage({
-                type: 'refresh',
-                changes: changes
-            });
+            const status = await this._getGitStatus();
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'updateChanges',
+                    status
+                });
+            }
         } catch (error) {
-            console.error('Failed to get git status:', error);
-            vscode.window.showErrorMessage('Failed to get git status: ' + error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage('Failed to update changes: ' + errorMessage);
         }
     }
 
-    private _getNotGitRepoHtml() {
-        return `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Not a Git Repository</title>
-                <style>
-                    body {
-                        padding: 10px;
-                        color: var(--vscode-foreground);
-                        font-family: var(--vscode-font-family);
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        text-align: center;
-                    }
-                    button {
-                        margin-top: 10px;
-                        padding: 8px 16px;
-                        background: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                    }
-                    button:hover {
-                        background: var(--vscode-button-hoverBackground);
-                    }
-                </style>
-            </head>
-            <body>
-                <h3>Not a Git Repository</h3>
-                <p>This folder is not a git repository.</p>
-                <button onclick="initRepo()">Initialize Git Repository</button>
-                <script>
-                    const vscode = acquireVsCodeApi();
-                    
-                    function initRepo() {
-                        vscode.postMessage({ type: 'init' });
-                    }
-                </script>
-            </body>
-            </html>
-        `;
+    private async _getGitStatus(): Promise<GitStatus> {
+        const repositories: GitStatus['repositories'] = {};
+
+        // Get status for each repository
+        for (const [repoPath, git] of this._gitRepos.entries()) {
+            try {
+                const status = await git.status();
+                
+                // All versioned files with changes
+                const versioned = [
+                    ...status.staged,
+                    ...status.created,
+                    ...status.modified,
+                    ...status.renamed.map(f => f.to),
+                    ...status.deleted
+                ];
+
+                // Files not tracked by git
+                const unversioned = [...status.not_added];
+
+                repositories[repoPath] = {
+                    versioned: [...new Set(versioned)], // Remove duplicates
+                    unversioned
+                };
+            } catch (error) {
+                console.error(`Error getting status for repo ${repoPath}:`, error);
+                repositories[repoPath] = { versioned: [], unversioned: [] };
+            }
+        }
+
+        return { repositories };
     }
 
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        return `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Commit Changes</title>
-                <style>
-                    body {
-                        padding: 10px;
-                        color: var(--vscode-foreground);
-                        font-family: var(--vscode-font-family);
-                    }
-                    .container {
-                        display: flex;
-                        flex-direction: column;
-                        height: 100vh;
-                    }
-                    .files-section {
-                        flex: 1;
-                        margin-bottom: 10px;
-                        border: 1px solid var(--vscode-panel-border);
-                        overflow-y: auto;
-                    }
-                    .file-list {
-                        list-style: none;
-                        padding: 0;
-                        margin: 0;
-                    }
-                    .file-item {
-                        padding: 4px 8px;
-                        display: flex;
-                        align-items: center;
-                    }
-                    .file-item:hover {
-                        background-color: var(--vscode-list-hoverBackground);
-                    }
-                    .commit-section {
-                        margin-top: 10px;
-                    }
-                    textarea {
-                        width: 100%;
-                        min-height: 100px;
-                        margin-bottom: 10px;
-                        background-color: var(--vscode-input-background);
-                        color: var(--vscode-input-foreground);
-                        border: 1px solid var(--vscode-input-border);
-                        padding: 5px;
-                    }
-                    button {
-                        background-color: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        border: none;
-                        padding: 8px 12px;
-                        cursor: pointer;
-                    }
-                    button:hover {
-                        background-color: var(--vscode-button-hoverBackground);
-                    }
-                    .section-title {
-                        padding: 5px;
-                        background-color: var(--vscode-sideBarSectionHeader-background);
-                        font-weight: bold;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="files-section">
-                        <div class="section-title">Changed Files</div>
-                        <div id="fileList"></div>
-                    </div>
-                    <div class="commit-section">
-                        <textarea id="commitMessage" placeholder="Commit message"></textarea>
-                        <button id="commitButton">Commit</button>
-                        <button id="refreshButton">Refresh</button>
-                    </div>
-                </div>
-                <script>
-                    const vscode = acquireVsCodeApi();
+    private async _commitChanges(message: string, files: Array<{ path: string, repo: string }>) {
+        // Group files by repository
+        const filesByRepo = new Map<string, string[]>();
+        for (const file of files) {
+            const repoFiles = filesByRepo.get(file.repo) || [];
+            repoFiles.push(file.path);
+            filesByRepo.set(file.repo, repoFiles);
+        }
+
+        // Commit in each repository
+        const results: Array<{ repo: string, success: boolean, error?: string }> = [];
+        
+        for (const [repoPath, filesToCommit] of filesByRepo.entries()) {
+            const git = this._gitRepos.get(repoPath);
+            if (!git) continue;
+
+            try {
+                // Stage selected files
+                await git.add(filesToCommit);
+                // Commit changes
+                await git.commit(message);
+                results.push({ repo: repoPath, success: true });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                results.push({ repo: repoPath, success: false, error: errorMessage });
+            }
+        }
+
+        // Show results
+        const successful = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+
+        if (successful > 0) {
+            vscode.window.showInformationMessage(
+                `Changes committed successfully in ${successful} ${successful === 1 ? 'repository' : 'repositories'}`
+            );
+        }
+
+        if (failed > 0) {
+            const errors = results
+                .filter(r => !r.success)
+                .map(r => `${path.basename(r.repo)}: ${r.error}`)
+                .join('\n');
+            vscode.window.showErrorMessage(`Failed to commit in ${failed} ${failed === 1 ? 'repository' : 'repositories'}:\n${errors}`);
+        }
+
+        // Refresh the view
+        await this._updateChanges();
+    }
+
+    private async _getHtmlForWebview(webview: vscode.Webview) {
+        return `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Git Commit</title>
+            <style>
+                body {
+                    padding: 10px;
+                    color: var(--vscode-foreground);
+                    font-family: var(--vscode-font-family);
+                }
+                .tree-node {
+                    margin: 2px 0;
+                }
+                .tree-content {
+                    display: flex;
+                    align-items: center;
+                    padding: 2px 0;
+                }
+                .tree-toggle {
+                    width: 16px;
+                    height: 16px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    user-select: none;
+                    color: var(--vscode-foreground);
+                }
+                .tree-toggle.no-children {
+                    visibility: hidden;
+                }
+                .tree-children {
+                    margin-left: 16px;
+                    display: none;
+                }
+                .tree-children.expanded {
+                    display: block;
+                }
+                .tree-label {
+                    margin-left: 4px;
+                    flex: 1;
+                }
+                .root-node {
+                    font-weight: bold;
+                    color: var(--vscode-sideBarTitle-foreground);
+                    background-color: var(--vscode-sideBarSectionHeader-background);
+                    padding: 6px;
+                    margin: 10px 0;
+                }
+                .repo-node {
+                    font-weight: bold;
+                    color: var(--vscode-descriptionForeground);
+                    padding: 4px 0;
+                }
+                .file-node {
+                    color: var(--vscode-gitDecoration-modifiedResourceForeground);
+                }
+                .file-node.unversioned {
+                    color: var(--vscode-gitDecoration-untrackedResourceForeground);
+                }
+                .select-all {
+                    margin-left: auto;
+                    color: var(--vscode-textLink-foreground);
+                    cursor: pointer;
+                    font-size: 0.9em;
+                }
+                .select-all:hover {
+                    text-decoration: underline;
+                }
+                .commit-input {
+                    width: 100%;
+                    min-height: 60px;
+                    margin: 10px 0;
+                    padding: 8px;
+                    background-color: var(--vscode-input-background);
+                    color: var(--vscode-input-foreground);
+                    border: 1px solid var(--vscode-input-border);
+                    resize: vertical;
+                }
+                .commit-button {
+                    background-color: var(--vscode-button-background);
+                    color: var(--vscode-button-foreground);
+                    border: none;
+                    padding: 8px 16px;
+                    cursor: pointer;
+                }
+                .commit-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+                .refresh-button {
+                    background-color: transparent;
+                    border: 1px solid var(--vscode-button-border);
+                    color: var(--vscode-button-foreground);
+                    padding: 4px 8px;
+                    cursor: pointer;
+                    float: right;
+                }
+                .empty-message {
+                    color: var(--vscode-descriptionForeground);
+                    font-style: italic;
+                    padding: 4px 20px;
+                }
+                input[type="checkbox"] {
+                    margin-right: 6px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="commit-view">
+                <button class="refresh-button" onclick="refreshChanges()"> Refresh</button>
+                
+                <div id="tree-root"></div>
+
+                <textarea id="commit-message" class="commit-input" placeholder="Commit message"></textarea>
+                <button id="commit-button" class="commit-button" onclick="commitChanges()" disabled>Commit</button>
+            </div>
+            <script>
+                const vscode = acquireVsCodeApi();
+                let selectedFiles = new Map(); // Map<string, Set<string>> - repo -> files
+                let currentStatus = null;
+                let expandedNodes = new Set();
+
+                function refreshChanges() {
+                    vscode.postMessage({ type: 'refresh' });
+                }
+
+                function toggleNode(nodeId) {
+                    const childrenElement = document.getElementById(\`children-\${nodeId}\`);
+                    const toggleElement = document.getElementById(\`toggle-\${nodeId}\`);
                     
-                    document.getElementById('commitButton').addEventListener('click', () => {
-                        const message = document.getElementById('commitMessage').value;
-                        if (message) {
-                            vscode.postMessage({
-                                type: 'commit',
-                                message: message
-                            });
-                        }
-                    });
+                    if (childrenElement.classList.contains('expanded')) {
+                        childrenElement.classList.remove('expanded');
+                        toggleElement.textContent = '▶';
+                        expandedNodes.delete(nodeId);
+                    } else {
+                        childrenElement.classList.add('expanded');
+                        toggleElement.textContent = '▼';
+                        expandedNodes.add(nodeId);
+                    }
+                }
 
-                    document.getElementById('refreshButton').addEventListener('click', () => {
-                        vscode.postMessage({ type: 'refresh' });
-                    });
+                function toggleAllFiles(repoPath, type) {
+                    const status = currentStatus.repositories[repoPath];
+                    const files = type === 'versioned' ? status.versioned : status.unversioned;
+                    const repoFiles = selectedFiles.get(repoPath) || new Set();
+                    const allSelected = files.every(file => repoFiles.has(file));
+                    
+                    if (allSelected) {
+                        files.forEach(file => repoFiles.delete(file));
+                    } else {
+                        files.forEach(file => repoFiles.add(file));
+                    }
+                    
+                    selectedFiles.set(repoPath, repoFiles);
+                    updateView();
+                }
 
-                    window.addEventListener('message', event => {
-                        const message = event.data;
-                        switch (message.type) {
-                            case 'refresh':
-                                updateFileList(message.changes);
-                                break;
-                        }
-                    });
-
-                    function updateFileList(changes) {
-                        const fileList = document.getElementById('fileList');
-                        fileList.innerHTML = '';
-
-                        const list = document.createElement('ul');
-                        list.className = 'file-list';
-
-                        // Add staged files
-                        changes.staged.forEach(file => {
-                            addFileItem(list, file, 'Staged');
-                        });
-
-                        // Add modified files
-                        changes.modified.forEach(file => {
-                            addFileItem(list, file, 'Modified');
-                        });
-
-                        // Add untracked files
-                        changes.untracked.forEach(file => {
-                            addFileItem(list, file, 'Untracked');
-                        });
-
-                        fileList.appendChild(list);
+                function toggleFile(repoPath, file) {
+                    let repoFiles = selectedFiles.get(repoPath);
+                    if (!repoFiles) {
+                        repoFiles = new Set();
+                        selectedFiles.set(repoPath, repoFiles);
                     }
 
-                    function addFileItem(list, file, status) {
-                        const item = document.createElement('li');
-                        item.className = 'file-item';
-                        item.innerHTML = \`
-                            <input type="checkbox" checked />
-                            <span style="margin-left: 5px;">\${file} (\${status})</span>
-                        \`;
-                        list.appendChild(item);
+                    if (repoFiles.has(file)) {
+                        repoFiles.delete(file);
+                    } else {
+                        repoFiles.add(file);
                     }
-                </script>
-            </body>
-            </html>
-        `;
+                    updateView();
+                }
+
+                function updateView() {
+                    if (!currentStatus) return;
+                    
+                    const treeHtml = [];
+                    
+                    // Create versioned files tree
+                    const versionedRepos = Object.entries(currentStatus.repositories)
+                        .filter(([_, status]) => status.versioned.length > 0)
+                        .map(([repoPath, status]) => 
+                            createRepoNode(repoPath, status.versioned, 'versioned'))
+                        .join('');
+                    
+                    if (versionedRepos) {
+                        treeHtml.push(createRootNode('tracking', 'Tracking', versionedRepos));
+                    }
+                    
+                    // Create unversioned files tree
+                    const unversionedRepos = Object.entries(currentStatus.repositories)
+                        .filter(([_, status]) => status.unversioned.length > 0)
+                        .map(([repoPath, status]) => 
+                            createRepoNode(repoPath, status.unversioned, 'unversioned'))
+                        .join('');
+                    
+                    if (unversionedRepos) {
+                        treeHtml.push(createRootNode('unversioned', 'Unversioned Files', unversionedRepos));
+                    }
+                    
+                    document.getElementById('tree-root').innerHTML = treeHtml.join('');
+                    
+                    // Restore expanded state
+                    expandedNodes.forEach(nodeId => {
+                        const childrenElement = document.getElementById(\`children-\${nodeId}\`);
+                        const toggleElement = document.getElementById(\`toggle-\${nodeId}\`);
+                        if (childrenElement && toggleElement) {
+                            childrenElement.classList.add('expanded');
+                            toggleElement.textContent = '▼';
+                        }
+                    });
+                    
+                    updateCommitButton();
+                }
+
+                function createRootNode(id, label, children) {
+                    return \`
+                        <div class="tree-node">
+                            <div class="tree-content root-node">
+                                <span id="toggle-\${id}" class="tree-toggle" onclick="toggleNode('\${id}')">▶</span>
+                                <span class="tree-label">\${label}</span>
+                            </div>
+                            <div id="children-\${id}" class="tree-children">
+                                \${children || '<div class="empty-message">No files</div>'}
+                            </div>
+                        </div>
+                    \`;
+                }
+
+                function createRepoNode(repoPath, files, type) {
+                    if (!files || files.length === 0) return '';
+                    
+                    const repoId = \`\${type}-\${repoPath}\`;
+                    const repoName = repoPath.split('/').pop();
+                    return \`
+                        <div class="tree-node">
+                            <div class="tree-content repo-node">
+                                <span id="toggle-\${repoId}" class="tree-toggle" onclick="toggleNode('\${repoId}')">▶</span>
+                                <span class="tree-label">\${repoName}</span>
+                                <span class="select-all" onclick="toggleAllFiles('\${repoPath}', '\${type}')">Select All</span>
+                            </div>
+                            <div id="children-\${repoId}" class="tree-children">
+                                \${files.map(file => createFileNode(repoPath, file, type)).join('')}
+                            </div>
+                        </div>
+                    \`;
+                }
+
+                function createFileNode(repoPath, file, type) {
+                    const repoFiles = selectedFiles.get(repoPath) || new Set();
+                    return \`
+                        <div class="tree-node">
+                            <div class="tree-content file-node \${type}">
+                                <span class="tree-toggle no-children"></span>
+                                <label class="tree-label">
+                                    <input type="checkbox" 
+                                           onchange="toggleFile('\${repoPath}', '\${file}')"
+                                           \${repoFiles.has(file) ? 'checked' : ''}>
+                                    \${file}
+                                </label>
+                            </div>
+                        </div>
+                    \`;
+                }
+
+                function updateCommitButton() {
+                    const message = document.getElementById('commit-message').value;
+                    const hasFiles = Array.from(selectedFiles.values())
+                        .some(files => files.size > 0);
+                    document.getElementById('commit-button').disabled = !message || !hasFiles;
+                }
+
+                function commitChanges() {
+                    const message = document.getElementById('commit-message').value;
+                    const files = [];
+                    for (const [repo, fileSet] of selectedFiles.entries()) {
+                        for (const file of fileSet) {
+                            files.push({ repo, path: file });
+                        }
+                    }
+                    vscode.postMessage({
+                        type: 'commit',
+                        message,
+                        files
+                    });
+                }
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    switch (message.type) {
+                        case 'updateChanges':
+                            currentStatus = message.status;
+                            updateView();
+                            break;
+                    }
+                });
+
+                document.getElementById('commit-message').addEventListener('input', updateCommitButton);
+            </script>
+        </body>
+        </html>`;
     }
 }
 
@@ -541,12 +679,8 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        // Use the first repository as the working directory
-        const workspaceRoot = repositories[0];
-        console.log('Selected repository:', workspaceRoot);
-
         try {
-            const provider = new CommitViewProvider(context.extensionUri, workspaceRoot);
+            const provider = new CommitViewProvider(context.extensionUri, repositories);
             const providerRegistration = vscode.window.registerWebviewViewProvider('iallAutoCommitView', provider);
             context.subscriptions.push(providerRegistration);
         } catch (error) {
