@@ -1,8 +1,9 @@
 const vscode = acquireVsCodeApi();
-let selectedFiles = new Map(); // Map<string, Set<string>> - repo -> files
 let currentStatus = null;
+let selectedFiles = new Map();
 let expandedNodes = new Set();
 let focusedNodeId = null;
+let isTreeView = true;
 
 function refreshChanges() {
     vscode.postMessage({ type: 'refresh' });
@@ -206,6 +207,61 @@ function createRootNode(id, label, children) {
     `;
 }
 
+function toggleViewMode() {
+    const select = document.getElementById('view-mode');
+    isTreeView = select.value === 'tree';
+    updateView();
+}
+
+function createFileTree(files) {
+    const tree = {};
+    files.forEach(file => {
+        const parts = file.split('/');
+        let current = tree;
+        parts.forEach((part, index) => {
+            if (index === parts.length - 1) {
+                // Leaf node (file)
+                if (!current._files) current._files = [];
+                current._files.push(file);
+            } else {
+                // Directory node
+                if (!current[part]) current[part] = {};
+                current = current[part];
+            }
+        });
+    });
+    return tree;
+}
+
+function createDirectoryNode(path, name, tree, type, repoPath) {
+    const dirId = `${type}-${repoPath}-${path}`.replace(/[^a-zA-Z0-9-]/g, '-');
+    const files = tree._files || [];
+    const dirs = Object.entries(tree).filter(([key]) => key !== '_files');
+    
+    return `
+        <div id="${dirId}" class="tree-node" tabindex="0">
+            <div class="tree-content directory-node">
+                <span id="toggle-${dirId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${dirId}')"></span>
+                <div class="tree-label">
+                    ${name}
+                </div>
+            </div>
+            <div id="children-${dirId}" class="tree-children">
+                ${dirs.map(([dirname, subtree]) => 
+                    createDirectoryNode(
+                        path ? `${path}/${dirname}` : dirname,
+                        dirname,
+                        subtree,
+                        type,
+                        repoPath
+                    )
+                ).join('')}
+                ${files.map(file => createFileNode(repoPath, file, type)).join('')}
+            </div>
+        </div>
+    `;
+}
+
 function createRepoNode(repoPath, files, type) {
     if (!files || files.length === 0) return '';
     
@@ -214,27 +270,54 @@ function createRepoNode(repoPath, files, type) {
     const repoFiles = selectedFiles.get(repoPath) || new Set();
     const allSelected = files.every(file => repoFiles.has(file));
     
-    return `
-        <div id="${repoId}" class="tree-node" tabindex="0">
-            <div class="tree-content repo-node">
-                <span id="toggle-${repoId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${repoId}')"></span>
-                <div class="tree-label">
-                    <input type="checkbox" 
-                           onchange="toggleAllFiles('${repoPath}', '${type}')"
-                           ${allSelected ? 'checked' : ''}>
-                    ${repoName}
+    if (isTreeView) {
+        const fileTree = createFileTree(files);
+        return `
+            <div id="${repoId}" class="tree-node" tabindex="0">
+                <div class="tree-content repo-node">
+                    <span id="toggle-${repoId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${repoId}')"></span>
+                    <div class="tree-label">
+                        <input type="checkbox" 
+                               onchange="toggleAllFiles('${repoPath}', '${type}')"
+                               ${allSelected ? 'checked' : ''}>
+                        ${repoName}
+                    </div>
+                </div>
+                <div id="children-${repoId}" class="tree-children">
+                    ${Object.entries(fileTree)
+                        .filter(([key]) => key !== '_files')
+                        .map(([dirname, subtree]) => 
+                            createDirectoryNode(dirname, dirname, subtree, type, repoPath)
+                        ).join('')}
+                    ${(fileTree._files || []).map(file => createFileNode(repoPath, file, type)).join('')}
                 </div>
             </div>
-            <div id="children-${repoId}" class="tree-children">
-                ${files.map(file => createFileNode(repoPath, file, type)).join('')}
+        `;
+    } else {
+        return `
+            <div id="${repoId}" class="tree-node" tabindex="0">
+                <div class="tree-content repo-node">
+                    <span id="toggle-${repoId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${repoId}')"></span>
+                    <div class="tree-label">
+                        <input type="checkbox" 
+                               onchange="toggleAllFiles('${repoPath}', '${type}')"
+                               ${allSelected ? 'checked' : ''}>
+                        ${repoName}
+                    </div>
+                </div>
+                <div id="children-${repoId}" class="tree-children">
+                    ${files.map(file => createFileNode(repoPath, file, type)).join('')}
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 function createFileNode(repoPath, file, type) {
     const repoFiles = selectedFiles.get(repoPath) || new Set();
     const fileId = `${type}-${repoPath}-${file.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const fileName = file.split('/').pop(); // Get just the file name for display
+    
     return `
         <div id="${fileId}" class="tree-node" tabindex="0">
             <div class="tree-content file-node ${type}">
@@ -243,7 +326,7 @@ function createFileNode(repoPath, file, type) {
                     <input type="checkbox" 
                            onchange="toggleFile('${repoPath}', '${file}')"
                            ${repoFiles.has(file) ? 'checked' : ''}>
-                    ${file}
+                    ${isTreeView ? fileName : file}
                 </div>
             </div>
         </div>
@@ -293,9 +376,15 @@ function commitChanges() {
 
 window.addEventListener('message', event => {
     const message = event.data;
+    console.log('Received message:', message);
     switch (message.type) {
         case 'updateChanges':
             currentStatus = message.status;
+            updateView();
+            break;
+        case 'toggleViewMode':
+            console.log('Toggling view mode to:', message.isTreeView);
+            isTreeView = message.isTreeView;
             updateView();
             break;
     }

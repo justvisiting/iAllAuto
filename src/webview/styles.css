@@ -5,12 +5,19 @@ body {
 }
 
 .header {
+    padding: 8px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 6px;
-    margin-bottom: 10px;
-    background-color: var(--vscode-sideBarSectionHeader-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-sideBarSectionHeader-background);
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: normal;
+    color: var(--vscode-sideBarTitle-foreground);
 }
 
 .header-title {
@@ -204,4 +211,60 @@ input[type="checkbox"] {
     color: var(--vscode-sideBarTitle-foreground);
     background-color: var(--vscode-sideBarSectionHeader-background);
     padding: 2px;
+}
+
+.toolbar {
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.view-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+.view-toggle:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.view-toggle.flat-view .codicon-list-tree:before {
+    content: "\ea69"; /* codicon-list-flat */
+}
+
+.view-mode-select {
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border);
+    padding: 2px 4px;
+    font-size: 12px;
+    border-radius: 2px;
+}
+
+.directory-node .tree-label {
+    color: var(--vscode-gitDecoration-submoduleResourceForeground);
+}
+
+.codicon-folder {
+    color: var(--vscode-gitDecoration-submoduleResourceForeground);
+}
+
+.codicon-file {
+    color: var(--vscode-foreground);
+    opacity: 0.8;
+}
+
+/* Make sure icons are properly sized */
+.tree-label .codicon {
+    font-size: 16px;
+    margin-right: 4px;
 }

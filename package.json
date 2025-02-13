@@ -48,12 +48,22 @@
         "command": "iallAutoCommit.refresh",
         "title": "Refresh",
         "icon": "$(sync)"
+      },
+      {
+        "command": "iallAutoCommit.toggleViewMode",
+        "title": "Toggle View Mode",
+        "icon": "$(list-tree)"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "iallAutoCommit.refresh",
+          "when": "view == iallAutoCommitView",
+          "group": "navigation"
+        },
+        {
+          "command": "iallAutoCommit.toggleViewMode",
           "when": "view == iallAutoCommitView",
           "group": "navigation"
         }

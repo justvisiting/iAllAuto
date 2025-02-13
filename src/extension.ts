@@ -79,6 +79,8 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     private _gitRepos: Map<string, SimpleGit> = new Map();
     private _extensionPath: string;
     private _repositories: string[];
+    private _isTreeView: boolean = true;
+    private static _currentProvider: CommitViewProvider | undefined;
 
     constructor(
         extensionPath: string,
@@ -91,6 +93,11 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         for (const repoPath of repositories) {
             this._gitRepos.set(repoPath, simpleGit(repoPath));
         }
+        CommitViewProvider._currentProvider = this;
+    }
+
+    public static get current(): CommitViewProvider | undefined {
+        return CommitViewProvider._currentProvider;
     }
 
     public refresh() {
@@ -137,6 +144,16 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         // Initial update
         console.log('Performing initial update...');
         await this._updateChanges();
+    }
+
+    public toggleViewMode() {
+        this._isTreeView = !this._isTreeView;
+        if (this._view) {
+            this._view.webview.postMessage({ 
+                type: 'toggleViewMode',
+                isTreeView: this._isTreeView
+            });
+        }
     }
 
     private async _updateChanges() {
@@ -264,42 +281,67 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 
         return html;
     }
+
+    public show() {
+        vscode.commands.executeCommand('vscode.openView', 'iallAutoCommitView', vscode.ViewColumn.One);
+    }
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Extension "iAllAuto" is now active.');
+    try {
+        // Initialize repositories and provider
+        findGitRepositories().then(repositories => {
+            console.log('Found repositories:', repositories);
+            
+            const provider = new CommitViewProvider(
+                context.extensionPath,
+                context.extensionUri,
+                repositories
+            );
 
-    // Initialize repositories and provider
-    findGitRepositories().then(repositories => {
-        console.log('=== Git Repositories ===');
-        console.log(JSON.stringify(repositories, null, 2));
-        console.log('=======================');
+            const view = vscode.window.registerWebviewViewProvider(
+                'iallAutoCommitView',
+                provider
+            );
 
-        if (repositories.length === 0) {
-            vscode.window.showWarningMessage('No Git repositories found in workspace.');
-            return;
-        }
+            // Register commands
+            const showCommitViewCommand = vscode.commands.registerCommand(
+                'iallauto.showCommitView',
+                () => {
+                    provider.show();
+                }
+            );
 
-        try {
-            const provider = new CommitViewProvider(context.extensionPath, context.extensionUri, repositories);
-            const providerRegistration = vscode.window.registerWebviewViewProvider('iallAutoCommitView', provider);
-            context.subscriptions.push(providerRegistration);
+            const refreshCommand = vscode.commands.registerCommand(
+                'iallAutoCommit.refresh',
+                () => {
+                    provider.refresh();
+                }
+            );
 
-            // Register refresh command
-            const refreshCommand = vscode.commands.registerCommand('iallAutoCommit.refresh', async () => {
-                const updatedRepos = await findGitRepositories();
-                provider.updateRepositories(updatedRepos);
-            });
-            context.subscriptions.push(refreshCommand);
+            const toggleViewCommand = vscode.commands.registerCommand(
+                'iallAutoCommit.toggleViewMode',
+                () => {
+                    console.log('Toggle view command triggered');
+                    provider.toggleViewMode();
+                }
+            );
 
-        } catch (error) {
-            console.error('Error activating extension:', error);
-            vscode.window.showErrorMessage('Error activating extension: ' + error);
-        }
-    }).catch(error => {
-        console.error('Error during activation:', error);
+            context.subscriptions.push(
+                view,
+                showCommitViewCommand,
+                refreshCommand,
+                toggleViewCommand
+            );
+        }).catch(error => {
+            console.error('Error finding repositories:', error);
+            vscode.window.showErrorMessage('Error finding repositories: ' + error);
+        });
+
+    } catch (error) {
+        console.error('Error activating extension:', error);
         vscode.window.showErrorMessage('Error activating extension: ' + error);
-    });
+    }
 }
 
 export function deactivate() {}
