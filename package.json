@@ -11,17 +11,68 @@
     "url": "https://github.com/justvisiting/iAllAuto"
   },
   "categories": [
+    "SCM Providers",
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:iallauto.showCommitView",
+    "onCommand:iallauto.refreshRepositories"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "iallauto.helloWorld",
-        "title": "Hello World"
+        "command": "iallauto.showCommitView",
+        "title": "Show Commit View",
+        "category": "iAllAuto"
+      },
+      {
+        "command": "iallauto.refreshRepositories",
+        "title": "Refresh Git Repositories",
+        "category": "iAllAuto"
       }
-    ]
+    ],
+    "views": {
+      "scm": [
+        {
+          "id": "iallAutoCommitView",
+          "name": "Commit Changes",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "iAllAuto",
+      "properties": {
+        "iallauto.git.baseFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "List of base folders to scan for Git repositories. Environment variables like $HOME are supported."
+        },
+        "iallauto.git.ignoredFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["node_modules", "out", "typings", "test"],
+          "description": "List of folders to ignore when scanning for Git repositories. Supports glob patterns."
+        },
+        "iallauto.git.maxDepth": {
+          "type": "number",
+          "default": 2,
+          "description": "Maximum depth to scan for Git repositories in subfolders."
+        },
+        "iallauto.git.scanMode": {
+          "type": "string",
+          "enum": ["workspace", "custom", "both"],
+          "default": "workspace",
+          "description": "How to scan for Git repositories: 'workspace' (only workspace folders), 'custom' (only baseFolders), or 'both'."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -42,5 +93,8 @@
     "@vscode/vsce": "^3.2.2",
     "eslint": "^9.19.0",
     "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "simple-git": "^3.27.0"
   }
 }
