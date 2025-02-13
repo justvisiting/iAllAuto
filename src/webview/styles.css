@@ -98,6 +98,11 @@ body {
     margin: 0 4px;
 }
 
+.section-checkbox:indeterminate {
+    opacity: 0.7;
+    background-color: var(--vscode-checkbox-background);
+}
+
 input[type="checkbox"] {
     margin: 0;
 }

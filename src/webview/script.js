@@ -68,11 +68,7 @@ function toggleFile(repoPath, file) {
 
     // Update section checkbox state
     const section = file.startsWith('.') ? 'unversioned' : 'tracking';
-    const sectionCheckbox = document.querySelector(`#toggle-${section}`).nextElementSibling;
-    const sectionFiles = document.querySelectorAll(`#children-${section} input[type="checkbox"]`);
-    const allChecked = Array.from(sectionFiles).every(box => box.checked);
-    console.log(`Section ${section} all files checked: ${allChecked}`);
-    sectionCheckbox.checked = allChecked;
+    updateSectionCheckboxState(section);
 
     updateView();
 }
@@ -82,6 +78,9 @@ function toggleAllInSection(sectionId) {
     const checkbox = document.querySelector(`#toggle-${sectionId}`).nextElementSibling;
     const isChecked = checkbox.checked;
     console.log(`Section checkbox state: ${isChecked}`);
+
+    // Clear indeterminate state
+    checkbox.indeterminate = false;
 
     // Get all repositories for this section
     const repos = Object.entries(currentStatus.repositories);
@@ -107,16 +106,39 @@ function toggleAllInSection(sectionId) {
         }
     });
 
-    // Update all checkboxes in the section
-    const section = document.getElementById(`children-${sectionId}`);
-    const fileCheckboxes = section.querySelectorAll('input[type="checkbox"]');
-    console.log(`Updating ${fileCheckboxes.length} checkboxes`);
-    
-    fileCheckboxes.forEach(box => {
-        box.checked = isChecked;
-    });
-
+    updateView();
     updateCommitButton();
+}
+
+function updateSectionCheckboxState(sectionId) {
+    console.log(`Updating section checkbox state for: ${sectionId}`);
+    const checkbox = document.querySelector(`#toggle-${sectionId}`).nextElementSibling;
+    const section = document.getElementById(`children-${sectionId}`);
+    const fileCheckboxes = Array.from(section.querySelectorAll('.file-node input[type="checkbox"]'));
+    
+    if (fileCheckboxes.length === 0) {
+        console.log('No files found in section');
+        checkbox.checked = false;
+        checkbox.indeterminate = false;
+        return;
+    }
+
+    const checkedCount = fileCheckboxes.filter(box => box.checked).length;
+    console.log(`Files in section: total=${fileCheckboxes.length}, checked=${checkedCount}`);
+
+    if (checkedCount === 0) {
+        console.log('No files selected');
+        checkbox.checked = false;
+        checkbox.indeterminate = false;
+    } else if (checkedCount === fileCheckboxes.length) {
+        console.log('All files selected');
+        checkbox.checked = true;
+        checkbox.indeterminate = false;
+    } else {
+        console.log('Some files selected');
+        checkbox.checked = false;
+        checkbox.indeterminate = true;
+    }
 }
 
 function updateView() {
@@ -159,6 +181,10 @@ function updateView() {
             toggleElement.textContent = '▼';
         }
     });
+
+    // Update section checkbox states
+    updateSectionCheckboxState('tracking');
+    updateSectionCheckboxState('unversioned');
     
     updateCommitButton();
 }
