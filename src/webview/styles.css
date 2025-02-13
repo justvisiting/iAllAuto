@@ -49,6 +49,17 @@ body {
     margin: 0;
     padding: 0;
     line-height: 1;
+    outline: none;
+}
+
+.tree-node.focused > .tree-content {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.tree-node.focused > .tree-content .tree-toggle,
+.tree-node.focused > .tree-content .tree-label {
+    color: var(--vscode-list-activeSelectionForeground);
 }
 
 .tree-content {
@@ -56,6 +67,7 @@ body {
     align-items: center;
     gap: 4px;
     padding: 2px;
+    border-radius: 2px;
 }
 
 .tree-toggle {

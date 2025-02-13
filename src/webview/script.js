@@ -2,6 +2,7 @@ const vscode = acquireVsCodeApi();
 let selectedFiles = new Map(); // Map<string, Set<string>> - repo -> files
 let currentStatus = null;
 let expandedNodes = new Set();
+let focusedNodeId = null;
 
 function refreshChanges() {
     vscode.postMessage({ type: 'refresh' });
@@ -192,7 +193,7 @@ function updateView() {
 function createRootNode(id, label, children) {
     console.log(`Creating root node: id=${id}, label=${label}`);
     return `
-        <div class="tree-node">
+        <div id="${id}" class="tree-node">
             <div class="tree-content root-node">
                 <span id="toggle-${id}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${id}')"></span>
                 <input type="checkbox" onchange="toggleAllInSection('${id}')" class="section-checkbox">
@@ -214,7 +215,7 @@ function createRepoNode(repoPath, files, type) {
     const allSelected = files.every(file => repoFiles.has(file));
     
     return `
-        <div class="tree-node">
+        <div id="${repoId}" class="tree-node">
             <div class="tree-content repo-node">
                 <span id="toggle-${repoId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${repoId}')"></span>
                 <div class="tree-label">
@@ -233,8 +234,9 @@ function createRepoNode(repoPath, files, type) {
 
 function createFileNode(repoPath, file, type) {
     const repoFiles = selectedFiles.get(repoPath) || new Set();
+    const fileId = `${type}-${repoPath}-${file.replace(/[^a-zA-Z0-9]/g, '-')}`;
     return `
-        <div class="tree-node">
+        <div id="${fileId}" class="tree-node">
             <div class="tree-content file-node ${type}">
                 <span class="tree-toggle no-children"></span>
                 <div class="tree-label">
@@ -279,5 +281,126 @@ window.addEventListener('message', event => {
             break;
     }
 });
+
+document.addEventListener('keydown', handleKeyDown);
+
+function handleKeyDown(event) {
+    if (!focusedNodeId) {
+        // If nothing is focused, focus the first node
+        const firstNode = document.querySelector('.tree-node');
+        if (firstNode) {
+            focusNode(firstNode.id || 'tracking');
+        }
+        return;
+    }
+
+    switch (event.key) {
+        case 'ArrowUp':
+            event.preventDefault();
+            moveFocus('prev');
+            break;
+        case 'ArrowDown':
+            event.preventDefault();
+            moveFocus('next');
+            break;
+        case 'ArrowRight':
+            event.preventDefault();
+            if (!isNodeExpanded(focusedNodeId)) {
+                toggleNode(focusedNodeId);
+            } else {
+                // If already expanded, move to first child
+                const firstChild = document.querySelector(`#children-${focusedNodeId} > .tree-node:first-child`);
+                if (firstChild) {
+                    focusNode(firstChild.id);
+                }
+            }
+            break;
+        case 'ArrowLeft':
+            event.preventDefault();
+            if (isNodeExpanded(focusedNodeId)) {
+                toggleNode(focusedNodeId);
+            } else {
+                // If already collapsed, move to parent
+                const parentNode = findParentNode(focusedNodeId);
+                if (parentNode) {
+                    focusNode(parentNode.id);
+                }
+            }
+            break;
+        case ' ':
+        case 'Enter':
+            event.preventDefault();
+            const checkbox = document.querySelector(`#${focusedNodeId} input[type="checkbox"]`);
+            if (checkbox) {
+                checkbox.click();
+            }
+            break;
+    }
+}
+
+function moveFocus(direction) {
+    const allNodes = Array.from(document.querySelectorAll('.tree-node'));
+    const visibleNodes = allNodes.filter(node => {
+        // Node is visible if it's not inside a collapsed parent
+        let parent = node.parentElement;
+        while (parent) {
+            if (parent.classList.contains('tree-children') && !parent.classList.contains('expanded')) {
+                return false;
+            }
+            parent = parent.parentElement;
+        }
+        return true;
+    });
+
+    const currentIndex = visibleNodes.findIndex(node => node.id === focusedNodeId);
+    let newIndex;
+
+    if (direction === 'next') {
+        newIndex = currentIndex + 1;
+        if (newIndex >= visibleNodes.length) newIndex = 0;
+    } else {
+        newIndex = currentIndex - 1;
+        if (newIndex < 0) newIndex = visibleNodes.length - 1;
+    }
+
+    focusNode(visibleNodes[newIndex].id);
+}
+
+function focusNode(nodeId) {
+    // Remove focus from previous node
+    if (focusedNodeId) {
+        const prevNode = document.getElementById(focusedNodeId);
+        if (prevNode) {
+            prevNode.classList.remove('focused');
+        }
+    }
+
+    // Add focus to new node
+    focusedNodeId = nodeId;
+    const newNode = document.getElementById(nodeId);
+    if (newNode) {
+        newNode.classList.add('focused');
+        newNode.scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function isNodeExpanded(nodeId) {
+    const childrenElement = document.getElementById(`children-${nodeId}`);
+    return childrenElement && childrenElement.classList.contains('expanded');
+}
+
+function findParentNode(nodeId) {
+    const node = document.getElementById(nodeId);
+    if (!node) return null;
+
+    let parent = node.parentElement;
+    while (parent) {
+        if (parent.classList.contains('tree-node')) {
+            return parent;
+        }
+        parent = parent.parentElement;
+    }
+    return null;
+}
 
 document.getElementById('commit-message').addEventListener('input', updateCommitButton);
