@@ -193,7 +193,7 @@ function updateView() {
 function createRootNode(id, label, children) {
     console.log(`Creating root node: id=${id}, label=${label}`);
     return `
-        <div id="${id}" class="tree-node">
+        <div id="${id}" class="tree-node" tabindex="0">
             <div class="tree-content root-node">
                 <span id="toggle-${id}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${id}')"></span>
                 <input type="checkbox" onchange="toggleAllInSection('${id}')" class="section-checkbox">
@@ -215,7 +215,7 @@ function createRepoNode(repoPath, files, type) {
     const allSelected = files.every(file => repoFiles.has(file));
     
     return `
-        <div id="${repoId}" class="tree-node">
+        <div id="${repoId}" class="tree-node" tabindex="0">
             <div class="tree-content repo-node">
                 <span id="toggle-${repoId}" class="tree-toggle codicon codicon-chevron-right" onclick="toggleNode('${repoId}')"></span>
                 <div class="tree-label">
@@ -236,7 +236,7 @@ function createFileNode(repoPath, file, type) {
     const repoFiles = selectedFiles.get(repoPath) || new Set();
     const fileId = `${type}-${repoPath}-${file.replace(/[^a-zA-Z0-9]/g, '-')}`;
     return `
-        <div id="${fileId}" class="tree-node">
+        <div id="${fileId}" class="tree-node" tabindex="0">
             <div class="tree-content file-node ${type}">
                 <span class="tree-toggle no-children"></span>
                 <div class="tree-label">
@@ -248,6 +248,25 @@ function createFileNode(repoPath, file, type) {
             </div>
         </div>
     `;
+}
+
+function toggleNodeSelection(nodeId) {
+    console.log('Toggling node:', nodeId);
+    
+    // For any node type, find the checkbox within its content div
+    const node = document.getElementById(nodeId);
+    if (!node) {
+        console.log('Node not found:', nodeId);
+        return;
+    }
+    
+    const checkbox = node.querySelector('.tree-content input[type="checkbox"]');
+    if (checkbox) {
+        console.log('Found checkbox, clicking');
+        checkbox.click();
+    } else {
+        console.log('No checkbox found in node');
+    }
 }
 
 function updateCommitButton() {
@@ -328,12 +347,8 @@ function handleKeyDown(event) {
             }
             break;
         case ' ':
-        case 'Enter':
             event.preventDefault();
-            const checkbox = document.querySelector(`#${focusedNodeId} input[type="checkbox"]`);
-            if (checkbox) {
-                checkbox.click();
-            }
+            toggleNodeSelection(focusedNodeId);
             break;
     }
 }

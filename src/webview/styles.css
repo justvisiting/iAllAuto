@@ -49,6 +49,9 @@ body {
     margin: 0;
     padding: 0;
     line-height: 1;
+}
+
+.tree-node:focus {
     outline: none;
 }
 
@@ -65,9 +68,9 @@ body {
 .tree-content {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px;
+    padding: 2px 4px;
     border-radius: 2px;
+    cursor: pointer;
 }
 
 .tree-toggle {
@@ -87,6 +90,13 @@ body {
     visibility: hidden;
 }
 
+.tree-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+}
+
 .tree-children {
     display: none;
     margin-left: 16px;
@@ -94,13 +104,6 @@ body {
 
 .tree-children.expanded {
     display: block;
-}
-
-.tree-label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0;
 }
 
 .tree-label input[type="checkbox"] {
