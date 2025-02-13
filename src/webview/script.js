@@ -188,6 +188,7 @@ function updateView() {
         console.log('No current status available');
         return;
     }
+    console.log('Updating view');
 
     // Create tracking section
     const versionedRepos = Object.entries(currentStatus.repositories)
@@ -372,6 +373,7 @@ function createDirectoryNode(path, name, tree, type, repoPath) {
     checkbox.dataset.repo = repoPath;
     checkbox.dataset.dir = path;
     checkbox.onchange = (e) => toggleDirectoryFiles(repoPath, path, e.target.checked);
+    console.log(`Created checkbox for directory ${path} in ${repoPath}`);
 
     // Get all files under this directory for checkbox state
     const allFiles = getAllFilesUnderTree(tree);
@@ -417,30 +419,28 @@ function createDirectoryNode(path, name, tree, type, repoPath) {
     return dirNode;
 }
 
-function getAllFilesUnderTree(tree) {
-    const files = tree._files || [];
-    const dirs = Object.entries(tree).filter(([key]) => key !== '_files');
-
-    return dirs.reduce((acc, [_, subtree]) => {
-        return acc.concat(getAllFilesUnderTree(subtree));
-    }, files);
-}
-
 function toggleDirectoryFiles(repoPath, dirPath, isChecked) {
+    console.log(`Toggling directory files for ${dirPath} in ${repoPath}, checked: ${isChecked}`);
+
     const fileTree = currentFilesByRepo[repoPath];
     if (!fileTree) return;
 
-    // Get the subtree for this directory
+    // Get the subtree for this directory by traversing the path
     const pathParts = dirPath.split('/');
     let currentTree = fileTree;
+    
+    // Navigate to the correct directory in the tree
     for (const part of pathParts) {
-        if (!currentTree[part]) break;
+        if (!currentTree || !currentTree[part]) {
+            console.error(`Cannot find directory: ${dirPath}`);
+            return;
+        }
         currentTree = currentTree[part];
     }
 
-    // Get all files under this directory
+    // Get all files under this directory and its subdirectories
     const allFiles = getAllFilesUnderTree(currentTree);
-    
+
     // Toggle all files
     allFiles.forEach(file => {
         if (isChecked) {
@@ -450,13 +450,48 @@ function toggleDirectoryFiles(repoPath, dirPath, isChecked) {
         }
     });
 
-    // Update all parent directory checkboxes
+    // Update parent directory checkboxes
     updateParentDirectoryCheckboxes(repoPath, dirPath);
     
-    // Update all child directory checkboxes
+    // Update child directory checkboxes
     updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked);
 
     updateCommitButton();
+}
+
+function getAllFilesUnderTree(tree) {
+    if (!tree) return [];
+    
+    let files = [];
+    
+    // Add files from current directory
+    if (tree._files) {
+        files.push(...tree._files);
+    }
+    
+    // Add files from subdirectories
+    Object.entries(tree).forEach(([key, subtree]) => {
+        if (key !== '_files') {
+            const subFiles = getAllFilesUnderTree(subtree);
+            files.push(...subFiles);
+        }
+    });
+    
+    return files;
+}
+
+function getSubtreeFromPath(tree, path) {
+    if (!path) return tree;
+    
+    const parts = path.split('/');
+    let current = tree;
+    
+    for (const part of parts) {
+        if (!current || !current[part]) return null;
+        current = current[part];
+    }
+    
+    return current;
 }
 
 function updateParentDirectoryCheckboxes(repoPath, dirPath) {
@@ -471,7 +506,7 @@ function updateParentDirectoryCheckboxes(repoPath, dirPath) {
             const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], currentPath);
             if (subtree) {
                 const allFiles = getAllFilesUnderTree(subtree);
-                const allSelected = allFiles.every(file => isFileSelected(repoPath, file));
+                const allSelected = allFiles.length > 0 && allFiles.every(file => isFileSelected(repoPath, file));
                 const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
                 
                 checkbox.checked = allSelected;
@@ -482,39 +517,18 @@ function updateParentDirectoryCheckboxes(repoPath, dirPath) {
 }
 
 function updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked) {
+    // Update immediate child checkboxes
     const selector = `.directory-checkbox[data-repo="${repoPath}"][data-dir^="${dirPath}/"]`;
     const childCheckboxes = document.querySelectorAll(selector);
     
     childCheckboxes.forEach(checkbox => {
-        checkbox.checked = isChecked;
-        checkbox.indeterminate = false;
+        const childPath = checkbox.dataset.dir;
+        const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], childPath);
+        if (subtree) {
+            checkbox.checked = isChecked;
+            checkbox.indeterminate = false;
+        }
     });
-}
-
-function getSubtreeFromPath(tree, path) {
-    if (!path) return tree;
-    const parts = path.split('/');
-    let current = tree;
-    
-    for (const part of parts) {
-        if (!current[part]) return null;
-        current = current[part];
-    }
-    
-    return current;
-}
-
-function getAllFilesUnderTree(tree) {
-    if (!tree) return [];
-    
-    const files = [...(tree._files || [])];
-    Object.entries(tree)
-        .filter(([key]) => key !== '_files')
-        .forEach(([_, subtree]) => {
-            files.push(...getAllFilesUnderTree(subtree));
-        });
-    
-    return files;
 }
 
 function createFileNode(repoPath, file, type) {
