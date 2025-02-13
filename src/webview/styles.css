@@ -46,8 +46,9 @@ body {
 }
 
 .tree-node {
-    margin: 2px 0;
-    padding: 4px 0;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
 }
 
 .tree-content {
@@ -81,11 +82,10 @@ body {
 }
 
 .tree-label {
-    margin-left: 4px;
-    flex: 1;
+    margin: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
 }
 
 .tree-label input[type="checkbox"] {
@@ -101,7 +101,7 @@ input[type="checkbox"] {
     color: var(--vscode-sideBarTitle-foreground);
     background-color: var(--vscode-sideBarSectionHeader-background);
     padding: 6px;
-    margin: 10px 0;
+    margin: 0;
 }
 
 .repo-node {
@@ -122,20 +122,20 @@ input[type="checkbox"] {
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 10px;
+    padding: 0;
 }
 
 #tree-root {
     flex: 1;
     overflow-y: auto;
-    margin-bottom: 10px;
+    margin: 0;
 }
 
 .commit-input {
     width: 100%;
     min-height: 60px;
-    margin: 10px 0;
-    padding: 8px;
+    margin: 0;
+    padding: 4px;
     border: 1px solid var(--vscode-input-border);
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
@@ -144,7 +144,7 @@ input[type="checkbox"] {
 
 .commit-button {
     width: 100%;
-    padding: 8px;
+    padding: 4px;
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
@@ -163,5 +163,19 @@ input[type="checkbox"] {
 .empty-message {
     color: var(--vscode-descriptionForeground);
     font-style: italic;
-    padding: 4px 20px;
+    margin: 0;
+    padding: 4px;
+}
+
+/* Git status colors */
+.status-modified {
+    color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+
+.status-deleted {
+    color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.status-untracked {
+    color: var(--vscode-gitDecoration-untrackedResourceForeground);
 }
