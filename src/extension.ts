@@ -229,17 +229,30 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _updateChanges() {
+        if (!this._view) {
+            console.log('View not initialized yet');
+            return;
+        }
+
         try {
+            console.log('Updating changes...');
             const status = await this._getGitStatus();
-            if (this._view) {
-                this._view.webview.postMessage({
-                    type: 'updateChanges',
-                    status
-                });
-            }
+            console.log('Got status:', status);
+            
+            // Check if we have any changes
+            const hasChanges = Object.values(status.repositories).some(repo => 
+                repo.versioned.length > 0 || repo.unversioned.length > 0
+            );
+            
+            console.log('Has changes:', hasChanges);
+
+            this._view.webview.postMessage({
+                type: 'updateChanges',
+                status
+            });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage('Failed to update changes: ' + errorMessage);
+            console.error('Failed to update changes:', error);
+            vscode.window.showErrorMessage('Failed to update changes: ' + (error instanceof Error ? error.message : String(error)));
         }
     }
 
@@ -249,7 +262,9 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         // Get status for each repository
         for (const [repoPath, git] of this._gitRepos.entries()) {
             try {
+                console.log(`Getting status for repo: ${repoPath}`);
                 const status = await git.status();
+                console.log(`Status for ${repoPath}:`, status);
                 
                 // All versioned files with changes
                 const versioned = [
@@ -267,6 +282,8 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                     versioned: [...new Set(versioned)], // Remove duplicates
                     unversioned
                 };
+                
+                console.log(`Processed status for ${repoPath}:`, repositories[repoPath]);
             } catch (error) {
                 console.error(`Error getting status for repo ${repoPath}:`, error);
                 repositories[repoPath] = { versioned: [], unversioned: [] };
