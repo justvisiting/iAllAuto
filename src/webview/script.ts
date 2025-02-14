@@ -133,55 +133,110 @@ function updateSectionCheckboxState(sectionId: string): void {
     }
 }
 
-function toggleSection(sectionId: string): void {
-    const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement | null;
-    const section = document.getElementById(`children-${sectionId}`);
+function toggleSection(sectionId: string, isChecked: boolean): void {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
 
-    if (checkbox && section) {
-        const fileCheckboxes = Array.from(section.querySelectorAll('.file-node input[type="checkbox"]')) as HTMLInputElement[];
-        const isChecked = checkbox.checked;
+    // Get all repo checkboxes in this section
+    const fileCheckboxes = section.querySelectorAll('input[type="checkbox"][data-repo]') as NodeListOf<HTMLInputElement>;
+    
+    // Toggle all files in each repo
+    const processedRepos = new Set<string>();
+    fileCheckboxes.forEach(checkbox => {
+        const repoPath = checkbox.dataset.repo;
+        const type = sectionId === 'tracking' ? 'versioned' : 'unversioned';
+        
+        if (repoPath && !processedRepos.has(repoPath)) {
+            processedRepos.add(repoPath);
+            const fileTree = currentFilesByType[repoPath]?.[type];
+            if (fileTree) {
+                const allFiles = getAllFilesUnderTree(fileTree);
+                allFiles.forEach(file => {
+                    if (isChecked) {
+                        selectFile(repoPath, file);
+                    } else {
+                        unselectFile(repoPath, file);
+                    }
+                });
+            }
+        }
+    });
 
-        fileCheckboxes.forEach(fileCheckbox => {
-            const repoPath = fileCheckbox.dataset.repo || '';
-            const filePath = fileCheckbox.dataset.file || '';
-            toggleFile(repoPath, filePath);
-        });
+    // Update the section checkbox state
+    const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
+    if (sectionCheckbox) {
+        sectionCheckbox.checked = isChecked;
+        sectionCheckbox.indeterminate = false;
     }
+
+    updateView();
 }
 
-function createSectionNode(id: string, label: string): SectionNode {
+function createSectionNode(sectionId: string, title: string): SectionNode {
     const sectionNode = document.createElement('div');
-    sectionNode.className = 'tree-node section-node';
-    sectionNode.id = id;
+    sectionNode.className = 'section';
+    sectionNode.id = sectionId;
 
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'tree-content section-node';
-
-    const toggleSpan = document.createElement('span');
-    toggleSpan.id = `toggle-${id}`;
-    toggleSpan.className = 'tree-toggle codicon codicon-chevron-right';
-    toggleSpan.onclick = () => toggleNode(id);
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'section-title';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.onchange = () => toggleSection(id);
+    checkbox.className = 'section-checkbox';
+    checkbox.id = `${sectionId}-checkbox`;
+    checkbox.onchange = (e: Event) => toggleSection(sectionId, (e.target as HTMLInputElement).checked);
 
-    const labelSpan = document.createElement('span');
-    labelSpan.textContent = label;
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = title;
 
-    contentDiv.appendChild(toggleSpan);
-    contentDiv.appendChild(checkbox);
-    contentDiv.appendChild(labelSpan);
+    titleDiv.appendChild(checkbox);
+    titleDiv.appendChild(titleSpan);
 
     const childrenDiv = document.createElement('div');
-    childrenDiv.id = `children-${id}`;
-    childrenDiv.className = 'tree-children';
-    childrenDiv.style.display = 'none';
+    childrenDiv.className = 'section-children';
 
-    sectionNode.appendChild(contentDiv);
+    sectionNode.appendChild(titleDiv);
     sectionNode.appendChild(childrenDiv);
 
     return { sectionNode, childrenDiv };
+}
+
+function updateSectionCheckboxStates(): void {
+    ['tracking', 'unversioned'].forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
+        if (!section || !sectionCheckbox) return;
+
+        const type = sectionId === 'tracking' ? 'versioned' : 'unversioned';
+        const fileCheckboxes = section.querySelectorAll('input[type="checkbox"][data-repo]') as NodeListOf<HTMLInputElement>;
+        
+        if (fileCheckboxes.length === 0) {
+            sectionCheckbox.checked = false;
+            sectionCheckbox.indeterminate = false;
+            return;
+        }
+
+        let allChecked = true;
+        let allUnchecked = true;
+
+        fileCheckboxes.forEach(checkbox => {
+            const repoPath = checkbox.dataset.repo;
+            if (repoPath) {
+                const fileTree = currentFilesByType[repoPath]?.[type];
+                if (fileTree) {
+                    const allFiles = getAllFilesUnderTree(fileTree);
+                    const allSelected = allFiles.every(file => isFileSelected(repoPath, file));
+                    const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
+
+                    if (!allSelected) allChecked = false;
+                    if (someSelected) allUnchecked = false;
+                }
+            }
+        });
+
+        sectionCheckbox.checked = allChecked;
+        sectionCheckbox.indeterminate = !allChecked && !allUnchecked;
+    });
 }
 
 function updateView(): void {
@@ -244,6 +299,9 @@ function updateView(): void {
         });
         root.appendChild(sectionNode);
     }
+
+    // Update section checkbox states
+    updateSectionCheckboxStates();
 
     // Restore expanded state
     expandedNodes.forEach(nodeId => {
