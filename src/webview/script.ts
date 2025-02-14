@@ -102,6 +102,15 @@ function toggleFile(repoPath: string, file: string): void {
         files: Array.from(files)
     })));
 
+    // Get the file's directory path
+    const dirPath = file.includes('/') ? file.substring(0, file.lastIndexOf('/')) : '';
+    console.log(`[toggleFile] Directory path: ${dirPath}`);
+
+    // Update parent directory checkboxes
+    if (dirPath) {
+        updateParentDirectoryCheckboxes(repoPath, dirPath, file.startsWith('.') ? 'unversioned' : 'tracking');
+    }
+
     // Update section checkbox state
     const section = file.startsWith('.') ? 'unversioned' : 'tracking';
     updateSectionCheckboxState(section);
@@ -110,36 +119,81 @@ function toggleFile(repoPath: string, file: string): void {
     updateCommitButton();
 }
 
-function updateSectionCheckboxState(sectionId: Section): void {
-    const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement | null;
-    const section = document.getElementById(`children-${sectionId}`);
-    if (!section || !checkbox) return;
+function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section): void {
+    console.log(`[updateParentDirectoryCheckboxes] Updating for repo: ${repoPath}, dir: ${dirPath}, section: ${section}`);
     
-    const fileCheckboxes = Array.from(section.querySelectorAll('.file-node input[type="checkbox"]')) as HTMLInputElement[];
-    
-    if (fileCheckboxes.length === 0) {
-        console.log('No files found in section');
-        checkbox.checked = false;
-        checkbox.indeterminate = false;
+    // Get all files in this directory from the file tree
+    const fileTree = currentFilesBySection[repoPath]?.[section];
+    if (!fileTree) {
+        console.log('[updateParentDirectoryCheckboxes] No file tree found');
         return;
     }
 
-    const checkedCount = fileCheckboxes.filter(box => box.checked).length;
-    console.log(`Files in section: total=${fileCheckboxes.length}, checked=${checkedCount}`);
-
-    if (checkedCount === 0) {
-        console.log('No files selected');
-        checkbox.checked = false;
-        checkbox.indeterminate = false;
-    } else if (checkedCount === fileCheckboxes.length) {
-        console.log('All files selected');
-        checkbox.checked = true;
-        checkbox.indeterminate = false;
-    } else {
-        console.log('Some files selected');
-        checkbox.checked = false;
-        checkbox.indeterminate = true;
+    const dirNode = getSubtreeFromPath(fileTree, dirPath);
+    if (!dirNode) {
+        console.log('[updateParentDirectoryCheckboxes] No directory node found');
+        return;
     }
+
+    // Get all files under this directory
+    const allFiles = getAllFilesUnderTree(dirNode);
+    console.log('[updateParentDirectoryCheckboxes] All files under directory:', allFiles);
+
+    // Check if all files are selected
+    const allSelected = allFiles.every(file => isFileSelected(repoPath, file));
+    const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
+    console.log(`[updateParentDirectoryCheckboxes] allSelected: ${allSelected}, someSelected: ${someSelected}`);
+
+    // Update directory checkbox
+    const dirCheckbox = document.querySelector(`input[type="checkbox"][data-repo="${repoPath}"][data-dir="${dirPath}"]`) as HTMLInputElement;
+    if (dirCheckbox) {
+        console.log(`[updateParentDirectoryCheckboxes] Updating directory checkbox: ${dirPath}`);
+        dirCheckbox.checked = allSelected;
+        dirCheckbox.indeterminate = !allSelected && someSelected;
+    }
+
+    // Update parent directories recursively
+    if (dirPath.includes('/')) {
+        const parentPath = dirPath.substring(0, dirPath.lastIndexOf('/'));
+        updateParentDirectoryCheckboxes(repoPath, parentPath, section);
+    }
+}
+
+function updateSectionCheckboxState(sectionId: Section): void {
+    console.log(`[updateSectionCheckboxState] Updating section: ${sectionId}`);
+    const section = document.getElementById(sectionId);
+    const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
+    if (!section || !sectionCheckbox) {
+        console.log('[updateSectionCheckboxState] Section or checkbox not found');
+        return;
+    }
+
+    let allChecked = true;
+    let allUnchecked = true;
+
+    // Check all repositories in this section
+    for (const [repoPath, sections] of Object.entries(currentFilesBySection)) {
+        const fileTree = sections[sectionId];
+        if (!fileTree) continue;
+
+        const allFiles = getAllFilesUnderTree(fileTree);
+        console.log(`[updateSectionCheckboxState] Files in repo ${repoPath}:`, allFiles);
+
+        for (const file of allFiles) {
+            const isSelected = isFileSelected(repoPath, file);
+            if (isSelected) {
+                allUnchecked = false;
+            } else {
+                allChecked = false;
+            }
+            if (!allChecked && !allUnchecked) break;
+        }
+        if (!allChecked && !allUnchecked) break;
+    }
+
+    console.log(`[updateSectionCheckboxState] allChecked: ${allChecked}, allUnchecked: ${allUnchecked}`);
+    sectionCheckbox.checked = allChecked;
+    sectionCheckbox.indeterminate = !allChecked && !allUnchecked;
 }
 
 function toggleSection(sectionId: Section, isChecked: boolean): void {
@@ -689,52 +743,6 @@ function getSubtreeFromPath(tree: FileTreeNode, path: string): FileTreeNode | nu
     return current;
 }
 
-function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section): void {
-    const pathParts = dirPath.split('/');
-    let currentPath = '';
-    
-    // Update each parent directory's checkbox state
-    for (let i = 0; i < pathParts.length; i++) {
-        currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i];
-        const checkbox = document.querySelector(`.directory-checkbox[data-repo="${repoPath}"][data-dir="${currentPath}"]`) as HTMLInputElement;
-        if (checkbox) {
-            const subtree = getSubtreeFromPath(currentFilesBySection[repoPath]?.[section], currentPath);
-            if (subtree) {
-                const allFiles = getAllFilesUnderTree(subtree);
-                const allSelected = allFiles.length > 0 && allFiles.every(file => isFileSelected(repoPath, file));
-                const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
-                
-                checkbox.checked = allSelected;
-                checkbox.indeterminate = !allSelected && someSelected;
-            }
-        }
-    }
-}
-
-function selectFile(repoPath: string, file: string): void {
-    const repoFiles = selectedFiles.get(repoPath);
-    if (!repoFiles) {
-        selectedFiles.set(repoPath, new Set([file]));
-    } else {
-        repoFiles.add(file);
-    }
-}
-
-function unselectFile(repoPath: string, file: string): void {
-    const repoFiles = selectedFiles.get(repoPath);
-    if (repoFiles) {
-        repoFiles.delete(file);
-        if (repoFiles.size === 0) {
-            selectedFiles.delete(repoPath);
-        }
-    }
-}
-
-function isFileSelected(repoPath: string, file: string): boolean {
-    const repoFiles = selectedFiles.get(repoPath);
-    return Boolean(repoFiles && repoFiles.has(file));
-}
-
 function updateCommitButton(): void {
     const commitButton = document.getElementById('commit-button') as HTMLButtonElement;
     const commitMessage = document.getElementById('commit-message') as HTMLTextAreaElement;
@@ -961,6 +969,30 @@ function handleKeyboardNavigation(event: KeyboardEvent): void {
     if (nextNode) {
         focusNode(nextNode);
     }
+}
+
+function selectFile(repoPath: string, file: string): void {
+    const repoFiles = selectedFiles.get(repoPath);
+    if (!repoFiles) {
+        selectedFiles.set(repoPath, new Set([file]));
+    } else {
+        repoFiles.add(file);
+    }
+}
+
+function unselectFile(repoPath: string, file: string): void {
+    const repoFiles = selectedFiles.get(repoPath);
+    if (repoFiles) {
+        repoFiles.delete(file);
+        if (repoFiles.size === 0) {
+            selectedFiles.delete(repoPath);
+        }
+    }
+}
+
+function isFileSelected(repoPath: string, file: string): boolean {
+    const repoFiles = selectedFiles.get(repoPath);
+    return Boolean(repoFiles && repoFiles.has(file));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
