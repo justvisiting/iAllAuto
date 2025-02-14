@@ -138,6 +138,9 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                 case 'commit':
                     await this._commitChanges(data.message, data.files);
                     break;
+                case 'push':
+                    await this._pushChanges();
+                    break;
             }
         });
 
@@ -260,6 +263,43 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                 .map(r => `${path.basename(r.repo)}: ${r.error}`)
                 .join('\n');
             vscode.window.showErrorMessage(`Failed to commit in ${failed} ${failed === 1 ? 'repository' : 'repositories'}:\n${errors}`);
+        }
+
+        // Refresh the view
+        await this._updateChanges();
+    }
+
+    private async _pushChanges() {
+        // Group files by repository
+        const results: Array<{ repo: string, success: boolean, error?: string }> = [];
+        
+        for (const [repoPath, git] of this._gitRepos.entries()) {
+            try {
+                // Push changes
+                await git.push();
+                results.push({ repo: repoPath, success: true });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                results.push({ repo: repoPath, success: false, error: errorMessage });
+            }
+        }
+
+        // Show results
+        const successful = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+
+        if (successful > 0) {
+            vscode.window.showInformationMessage(
+                `Changes pushed successfully in ${successful} ${successful === 1 ? 'repository' : 'repositories'}`
+            );
+        }
+
+        if (failed > 0) {
+            const errors = results
+                .filter(r => !r.success)
+                .map(r => `${path.basename(r.repo)}: ${r.error}`)
+                .join('\n');
+            vscode.window.showErrorMessage(`Failed to push in ${failed} ${failed === 1 ? 'repository' : 'repositories'}:\n${errors}`);
         }
 
         // Refresh the view

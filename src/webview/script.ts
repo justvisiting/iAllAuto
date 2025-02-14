@@ -738,21 +738,29 @@ function updateCommitButton(): void {
     }
 }
 
-function commitChanges(): void {
-    const message = (document.getElementById('commit-message') as HTMLInputElement)?.value || '';
-    const files: Array<{ repo: string; path: string }> = [];
-    
-    for (const [repo, fileSet] of selectedFiles.entries()) {
-        for (const file of fileSet) {
-            files.push({ repo, path: file });
-        }
+function handleCommit(): void {
+    const commitMessage = (document.getElementById('commit-message') as HTMLTextAreaElement).value;
+    const selectedFiles = getSelectedPaths();
+
+    if (selectedFiles.length === 0) {
+        updateStatusMessage('No files selected for commit', 'error');
+        return;
     }
-    
+
+    if (!commitMessage.trim()) {
+        updateStatusMessage('Please enter a commit message', 'error');
+        return;
+    }
+
     vscode.postMessage({
         type: 'commit',
-        message,
-        files
+        files: selectedFiles,
+        message: commitMessage
     });
+
+    // Clear the commit message
+    (document.getElementById('commit-message') as HTMLTextAreaElement).value = '';
+    updateCommitButton();
 }
 
 function toggleNodeSelection(nodeId: string): void {
@@ -916,6 +924,72 @@ function handleKeyboardNavigation(event: KeyboardEvent): void {
     }
 }
 
+function getSelectedPaths(): string[] {
+    const selectedPaths: string[] = [];
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+    
+    checkboxes.forEach((checkbox) => {
+        const element = checkbox as HTMLInputElement;
+        const dataset = element.dataset;
+        if (dataset.repo && dataset.dir && dataset.file) {
+            const path = `${dataset.repo}/${dataset.dir}/${dataset.file}`;
+            selectedPaths.push(path);
+        }
+    });
+
+    return selectedPaths;
+}
+
+function showPushPrompt(): void {
+    const pushPrompt = document.createElement('div');
+    pushPrompt.className = 'push-prompt';
+    pushPrompt.innerHTML = `
+        <div class="push-prompt-content">
+            <p>Would you like to push your changes?</p>
+            <div class="push-prompt-buttons">
+                <button id="push-yes" class="push-button">Yes</button>
+                <button id="push-no" class="push-button">No</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(pushPrompt);
+
+    // Add event listeners
+    document.getElementById('push-yes')?.addEventListener('click', () => {
+        vscode.postMessage({ type: 'push' });
+        pushPrompt.remove();
+    });
+
+    document.getElementById('push-no')?.addEventListener('click', () => {
+        pushPrompt.remove();
+    });
+}
+
+function updateStatusMessage(message: string, type: 'success' | 'error' = 'success'): void {
+    let statusArea = document.getElementById('status-message');
+    if (!statusArea) {
+        statusArea = document.createElement('div');
+        statusArea.id = 'status-message';
+        const commitButton = document.getElementById('commit-button');
+        if (commitButton) {
+            commitButton.insertAdjacentElement('afterend', statusArea);
+        }
+    }
+    
+    statusArea.textContent = message;
+    statusArea.className = `status-message ${type}`;
+    
+    // Clear the message after 5 seconds if it's a success message
+    if (type === 'success') {
+        setTimeout(() => {
+            if (statusArea) {
+                statusArea.textContent = '';
+                statusArea.className = 'status-message';
+            }
+        }, 5000);
+    }
+}
+
 // Event Listeners
 window.addEventListener('message', (event: MessageEvent<any>) => {
     const message = event.data;
@@ -932,6 +1006,11 @@ window.addEventListener('message', (event: MessageEvent<any>) => {
             break;
         case 'error':
             console.error('Error:', message.error);
+            updateStatusMessage(message.error, 'error');
+            break;
+        case 'commitSuccess':
+            updateStatusMessage('Changes committed successfully');
+            showPushPrompt();
             break;
         default:
             console.warn('Unknown message type:', message.type);
