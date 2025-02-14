@@ -1,36 +1,80 @@
-const vscode = acquireVsCodeApi();
-let currentStatus = null;
-let selectedFiles = new Map();
-let expandedNodes = new Set();
-let focusedNodeId = null;
-let isTreeView = true;
+// Type declarations
+declare const acquireVsCodeApi: () => {
+    postMessage: (message: any) => void;
+    setState: (state: any) => void;
+    getState: () => any;
+};
 
-function refreshChanges() {
+interface VSCode {
+    postMessage: (message: any) => void;
+}
+
+interface FileTreeNode {
+    _files: string[];
+    [key: string]: FileTreeNode | string[];
+}
+
+interface GitStatus {
+    repositories: {
+        [key: string]: {
+            versioned: string[];
+            unversioned: string[];
+        };
+    };
+}
+
+interface SectionNode {
+    sectionNode: HTMLDivElement;
+    childrenDiv: HTMLDivElement;
+}
+
+interface HTMLElement {
+    dataset: {
+        repo: string;
+        dir: string;
+        file: string;
+    };
+}
+
+const vscode: VSCode = acquireVsCodeApi();
+let currentStatus: GitStatus | null = null;
+let selectedFiles: Map<string, Set<string>> = new Map();
+let currentFilesByRepo: { [key: string]: FileTreeNode } = {};
+let expandedNodes: Set<string> = new Set();
+let focusedNodeId: string | null = null;
+let isTreeView: boolean = true;
+
+function refreshChanges(): void {
     vscode.postMessage({ type: 'refresh' });
 }
 
-function toggleNode(nodeId) {
+function toggleNode(nodeId: string): void {
     console.log(`Toggling node: ${nodeId}`);
-    const childrenElement = document.getElementById(`children-${nodeId}`);
-    const toggleElement = document.getElementById(`toggle-${nodeId}`);
+    const childrenElement = document.getElementById(`children-${nodeId}`) as HTMLDivElement | null;
+    const toggleElement = document.getElementById(`toggle-${nodeId}`) as HTMLSpanElement | null;
     
-    if (childrenElement.classList.contains('expanded')) {
-        console.log(`Collapsing node: ${nodeId}`);
-        childrenElement.classList.remove('expanded');
-        toggleElement.className = 'tree-toggle codicon codicon-chevron-right';
-        expandedNodes.delete(nodeId);
-    } else {
-        console.log(`Expanding node: ${nodeId}`);
-        childrenElement.classList.add('expanded');
-        toggleElement.className = 'tree-toggle codicon codicon-chevron-down';
-        expandedNodes.add(nodeId);
+    if (childrenElement && toggleElement) {
+        const isExpanded = expandedNodes.has(nodeId);
+        if (isExpanded) {
+            console.log(`Collapsing node: ${nodeId}`);
+            childrenElement.style.display = 'none';
+            toggleElement.classList.remove('codicon-chevron-down');
+            toggleElement.classList.add('codicon-chevron-right');
+            expandedNodes.delete(nodeId);
+        } else {
+            console.log(`Expanding node: ${nodeId}`);
+            childrenElement.style.display = 'block';
+            toggleElement.classList.remove('codicon-chevron-right');
+            toggleElement.classList.add('codicon-chevron-down');
+            expandedNodes.add(nodeId);
+        }
     }
 }
 
-function toggleAllFiles(repoPath, type) {
+function toggleAllFiles(repoPath: string, type: 'versioned' | 'unversioned'): void {
     console.log(`Toggling all files in repo: ${repoPath}, type: ${type}`);
-    const status = currentStatus.repositories[repoPath];
-    const files = type === 'versioned' ? status.versioned : status.unversioned;
+    const status = currentStatus?.repositories[repoPath];
+    const files = type === 'versioned' ? status?.versioned : status?.unversioned;
     let repoFiles = selectedFiles.get(repoPath);
     
     if (!repoFiles) {
@@ -38,21 +82,23 @@ function toggleAllFiles(repoPath, type) {
         selectedFiles.set(repoPath, repoFiles);
     }
 
-    const allSelected = files.every(file => repoFiles.has(file));
+    if (!files) return;
+    
+    const allSelected = files.every(file => repoFiles?.has(file));
     console.log(`All files selected: ${allSelected}`);
     
     if (allSelected) {
         console.log('Unselecting all files');
-        files.forEach(file => repoFiles.delete(file));
+        files.forEach(file => repoFiles?.delete(file));
     } else {
         console.log('Selecting all files');
-        files.forEach(file => repoFiles.add(file));
+        files.forEach(file => repoFiles?.add(file));
     }
     
     updateView();
 }
 
-function toggleFile(repoPath, file) {
+function toggleFile(repoPath: string, file: string): void {
     console.log(`Toggling file: ${file} in repo: ${repoPath}`);
     let repoFiles = selectedFiles.get(repoPath);
     if (!repoFiles) {
@@ -75,48 +121,12 @@ function toggleFile(repoPath, file) {
     updateView();
 }
 
-function toggleAllInSection(sectionId) {
-    console.log(`Toggling all files in section: ${sectionId}`);
-    const checkbox = document.querySelector(`#toggle-${sectionId}`).nextElementSibling;
-    const isChecked = checkbox.checked;
-    console.log(`Section checkbox state: ${isChecked}`);
-
-    // Clear indeterminate state
-    checkbox.indeterminate = false;
-
-    // Get all repositories for this section
-    const repos = Object.entries(currentStatus.repositories);
-    console.log(`Found ${repos.length} repositories`);
-
-    repos.forEach(([repoPath, status]) => {
-        let repoFiles = selectedFiles.get(repoPath);
-        if (!repoFiles) {
-            repoFiles = new Set();
-            selectedFiles.set(repoPath, repoFiles);
-        }
-
-        // Get files based on section
-        const files = sectionId === 'tracking' ? status.versioned : status.unversioned;
-        console.log(`Processing ${files.length} files for repo ${repoPath}`);
-
-        if (isChecked) {
-            // Select all files
-            files.forEach(file => repoFiles.add(file));
-        } else {
-            // Unselect all files
-            files.forEach(file => repoFiles.delete(file));
-        }
-    });
-
-    updateView();
-    updateCommitButton();
-}
-
-function updateSectionCheckboxState(sectionId) {
-    console.log(`Updating section checkbox state for: ${sectionId}`);
-    const checkbox = document.querySelector(`#toggle-${sectionId}`).nextElementSibling;
+function updateSectionCheckboxState(sectionId: string): void {
+    const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement | null;
     const section = document.getElementById(`children-${sectionId}`);
-    const fileCheckboxes = Array.from(section.querySelectorAll('.file-node input[type="checkbox"]'));
+    if (!section || !checkbox) return;
+    
+    const fileCheckboxes = Array.from(section.querySelectorAll('.file-node input[type="checkbox"]')) as HTMLInputElement[];
     
     if (fileCheckboxes.length === 0) {
         console.log('No files found in section');
@@ -143,14 +153,29 @@ function updateSectionCheckboxState(sectionId) {
     }
 }
 
-function createSectionNode(id, label) {
+function toggleSection(sectionId: string): void {
+    const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement | null;
+    const section = document.getElementById(`children-${sectionId}`);
+
+    if (checkbox && section) {
+        const fileCheckboxes = Array.from(section.querySelectorAll('.file-node input[type="checkbox"]')) as HTMLInputElement[];
+        const isChecked = checkbox.checked;
+
+        fileCheckboxes.forEach(fileCheckbox => {
+            const repoPath = fileCheckbox.dataset.repo || '';
+            const filePath = fileCheckbox.dataset.file || '';
+            toggleFile(repoPath, filePath);
+        });
+    }
+}
+
+function createSectionNode(id: string, label: string): SectionNode {
     const sectionNode = document.createElement('div');
+    sectionNode.className = 'tree-node section-node';
     sectionNode.id = id;
-    sectionNode.className = 'tree-node';
-    sectionNode.tabIndex = 0;
 
     const contentDiv = document.createElement('div');
-    contentDiv.className = 'tree-content root-node';
+    contentDiv.className = 'tree-content section-node';
 
     const toggleSpan = document.createElement('span');
     toggleSpan.id = `toggle-${id}`;
@@ -159,11 +184,9 @@ function createSectionNode(id, label) {
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.className = 'section-checkbox';
-    checkbox.onchange = () => toggleAllInSection(id);
+    checkbox.onchange = () => toggleSection(id);
 
     const labelSpan = document.createElement('span');
-    labelSpan.className = 'tree-label';
     labelSpan.textContent = label;
 
     contentDiv.appendChild(toggleSpan);
@@ -173,6 +196,7 @@ function createSectionNode(id, label) {
     const childrenDiv = document.createElement('div');
     childrenDiv.id = `children-${id}`;
     childrenDiv.className = 'tree-children';
+    childrenDiv.style.display = 'none';
 
     sectionNode.appendChild(contentDiv);
     sectionNode.appendChild(childrenDiv);
@@ -180,8 +204,9 @@ function createSectionNode(id, label) {
     return { sectionNode, childrenDiv };
 }
 
-function updateView() {
+function updateView(): void {
     const root = document.getElementById('tree-root');
+    if (!root) return;
     root.innerHTML = '';
 
     if (!currentStatus) {
@@ -225,7 +250,7 @@ function updateView() {
         const childrenElement = document.getElementById(`children-${nodeId}`);
         const toggleElement = document.getElementById(`toggle-${nodeId}`);
         if (childrenElement && toggleElement) {
-            childrenElement.classList.add('expanded');
+            childrenElement.style.display = 'block';
             toggleElement.className = 'tree-toggle codicon codicon-chevron-down';
         }
     });
@@ -237,11 +262,11 @@ function updateView() {
     updateCommitButton();
 }
 
-function createRepoNode(repoPath, files, type) {
+function createRepoNode(repoPath: string, files: string[], type: 'versioned' | 'unversioned'): HTMLDivElement | null {
     if (!files || files.length === 0) return null;
     
     const repoId = `${type}-${repoPath}`.replace(/[^a-zA-Z0-9-]/g, '-');
-    const repoName = repoPath.split('/').pop();
+    const repoName = repoPath.split('/').pop() || '';
     const repoFiles = selectedFiles.get(repoPath) || new Set();
     const allSelected = files.every(file => repoFiles.has(file));
 
@@ -291,22 +316,22 @@ function createRepoNode(repoPath, files, type) {
     if (isTreeView) {
         // Create file tree for hierarchical view
         const fileTree = createFileTree(files);
+        currentFilesByRepo[repoPath] = fileTree;
         
-        // Add directories
-        Object.entries(fileTree)
-            .filter(([key]) => key !== '_files')
-            .forEach(([dirname, subtree]) => {
+        // Add directories and files
+        const entries = Object.entries(fileTree).filter(([key]) => key !== '_files');
+        for (const [dirname, subtree] of entries) {
+            if (!Array.isArray(subtree)) {
                 childrenDiv.appendChild(
                     createDirectoryNode(dirname, dirname, subtree, type, repoPath)
                 );
-            });
+            }
+        }
 
         // Add root-level files
-        if (fileTree._files) {
-            fileTree._files.forEach(file => {
-                childrenDiv.appendChild(createFileNode(repoPath, file, type));
-            });
-        }
+        fileTree._files.forEach(file => {
+            childrenDiv.appendChild(createFileNode(repoPath, file, type));
+        });
     } else {
         // Flat view - just add all files
         files.forEach(file => {
@@ -321,29 +346,30 @@ function createRepoNode(repoPath, files, type) {
     return repoNode;
 }
 
-function createFileTree(files) {
-    const tree = {};
+function createFileTree(files: string[]): FileTreeNode {
+    const tree: FileTreeNode = { _files: [] };
     files.forEach(file => {
         const parts = file.split('/');
         let current = tree;
         parts.forEach((part, index) => {
             if (index === parts.length - 1) {
                 // Leaf node (file)
-                if (!current._files) current._files = [];
                 current._files.push(file);
             } else {
                 // Directory node
-                if (!current[part]) current[part] = {};
-                current = current[part];
+                if (!current[part] || Array.isArray(current[part])) {
+                    current[part] = { _files: [] };
+                }
+                current = current[part] as FileTreeNode;
             }
         });
     });
     return tree;
 }
 
-function createDirectoryNode(path, name, tree, type, repoPath) {
+function createDirectoryNode(path: string, name: string, tree: FileTreeNode, type: 'versioned' | 'unversioned', repoPath: string): HTMLDivElement {
     const dirId = `${type}-${repoPath}-${path}`.replace(/[^a-zA-Z0-9-]/g, '-');
-    const files = tree._files || [];
+    const files = tree._files;
     const dirs = Object.entries(tree).filter(([key]) => key !== '_files');
 
     // Create main directory node
@@ -372,12 +398,11 @@ function createDirectoryNode(path, name, tree, type, repoPath) {
     checkbox.className = 'directory-checkbox';
     checkbox.dataset.repo = repoPath;
     checkbox.dataset.dir = path;
-    checkbox.onchange = (e) => toggleDirectoryFiles(repoPath, path, e.target.checked);
-    console.log(`Created checkbox for directory ${path} in ${repoPath}`);
+    checkbox.onchange = (e: Event) => toggleDirectoryFiles(repoPath, path, (e.target as HTMLInputElement).checked);
 
     // Get all files under this directory for checkbox state
     const allFiles = getAllFilesUnderTree(tree);
-    const allSelected = allFiles.every(file => isFileSelected(repoPath, file));
+    const allSelected = allFiles.length > 0 && allFiles.every(file => isFileSelected(repoPath, file));
     const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
     checkbox.checked = allSelected;
     checkbox.indeterminate = !allSelected && someSelected;
@@ -401,10 +426,12 @@ function createDirectoryNode(path, name, tree, type, repoPath) {
 
     // Add subdirectories
     dirs.forEach(([dirname, subtree]) => {
-        const subdirPath = path ? `${path}/${dirname}` : dirname;
-        childrenDiv.appendChild(
-            createDirectoryNode(subdirPath, dirname, subtree, type, repoPath)
-        );
+        if (!Array.isArray(subtree) && dirname !== '_files') {
+            const subdirPath = path ? `${path}/${dirname}` : dirname;
+            childrenDiv.appendChild(
+                createDirectoryNode(subdirPath, dirname, subtree, type, repoPath)
+            );
+        }
     });
 
     // Add files
@@ -419,121 +446,9 @@ function createDirectoryNode(path, name, tree, type, repoPath) {
     return dirNode;
 }
 
-function toggleDirectoryFiles(repoPath, dirPath, isChecked) {
-    console.log(`Toggling directory files for ${dirPath} in ${repoPath}, checked: ${isChecked}`);
-
-    const fileTree = currentFilesByRepo[repoPath];
-    if (!fileTree) return;
-
-    // Get the subtree for this directory by traversing the path
-    const pathParts = dirPath.split('/');
-    let currentTree = fileTree;
-    
-    // Navigate to the correct directory in the tree
-    for (const part of pathParts) {
-        if (!currentTree || !currentTree[part]) {
-            console.error(`Cannot find directory: ${dirPath}`);
-            return;
-        }
-        currentTree = currentTree[part];
-    }
-
-    // Get all files under this directory and its subdirectories
-    const allFiles = getAllFilesUnderTree(currentTree);
-
-    // Toggle all files
-    allFiles.forEach(file => {
-        if (isChecked) {
-            selectFile(repoPath, file);
-        } else {
-            unselectFile(repoPath, file);
-        }
-    });
-
-    // Update parent directory checkboxes
-    updateParentDirectoryCheckboxes(repoPath, dirPath);
-    
-    // Update child directory checkboxes
-    updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked);
-
-    updateCommitButton();
-}
-
-function getAllFilesUnderTree(tree) {
-    if (!tree) return [];
-    
-    let files = [];
-    
-    // Add files from current directory
-    if (tree._files) {
-        files.push(...tree._files);
-    }
-    
-    // Add files from subdirectories
-    Object.entries(tree).forEach(([key, subtree]) => {
-        if (key !== '_files') {
-            const subFiles = getAllFilesUnderTree(subtree);
-            files.push(...subFiles);
-        }
-    });
-    
-    return files;
-}
-
-function getSubtreeFromPath(tree, path) {
-    if (!path) return tree;
-    
-    const parts = path.split('/');
-    let current = tree;
-    
-    for (const part of parts) {
-        if (!current || !current[part]) return null;
-        current = current[part];
-    }
-    
-    return current;
-}
-
-function updateParentDirectoryCheckboxes(repoPath, dirPath) {
-    const pathParts = dirPath.split('/');
-    let currentPath = '';
-    
-    // Update each parent directory's checkbox state
-    for (let i = 0; i < pathParts.length; i++) {
-        currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i];
-        const checkbox = document.querySelector(`.directory-checkbox[data-repo="${repoPath}"][data-dir="${currentPath}"]`);
-        if (checkbox) {
-            const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], currentPath);
-            if (subtree) {
-                const allFiles = getAllFilesUnderTree(subtree);
-                const allSelected = allFiles.length > 0 && allFiles.every(file => isFileSelected(repoPath, file));
-                const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
-                
-                checkbox.checked = allSelected;
-                checkbox.indeterminate = !allSelected && someSelected;
-            }
-        }
-    }
-}
-
-function updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked) {
-    // Update immediate child checkboxes
-    const selector = `.directory-checkbox[data-repo="${repoPath}"][data-dir^="${dirPath}/"]`;
-    const childCheckboxes = document.querySelectorAll(selector);
-    
-    childCheckboxes.forEach(checkbox => {
-        const childPath = checkbox.dataset.dir;
-        const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], childPath);
-        if (subtree) {
-            checkbox.checked = isChecked;
-            checkbox.indeterminate = false;
-        }
-    });
-}
-
-function createFileNode(repoPath, file, type) {
+function createFileNode(repoPath: string, file: string, type: 'versioned' | 'unversioned'): HTMLDivElement {
     const fileId = `${type}-${repoPath}-${file}`.replace(/[^a-zA-Z0-9-]/g, '-');
-    const fileName = file.split('/').pop();
+    const fileName = file.split('/').pop() || '';
     const repoFiles = selectedFiles.get(repoPath) || new Set();
 
     // Create main file node
@@ -578,40 +493,185 @@ function createFileNode(repoPath, file, type) {
     return fileNode;
 }
 
-function toggleNodeSelection(nodeId) {
-    console.log('Toggling node:', nodeId);
+function toggleAllInSection(sectionId: string): void {
+    console.log(`Toggling all files in section: ${sectionId}`);
+    const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement;
+    if (!checkbox || !currentStatus) return;
+
+    const isChecked = checkbox.checked;
+    console.log(`Section checkbox state: ${isChecked}`);
+
+    // Clear indeterminate state
+    checkbox.indeterminate = false;
+
+    // Get all repositories for this section
+    const repos = Object.entries(currentStatus.repositories);
+    console.log(`Found ${repos.length} repositories`);
+
+    repos.forEach(([repoPath, status]) => {
+        let repoFiles = selectedFiles.get(repoPath);
+        if (!repoFiles) {
+            repoFiles = new Set();
+            selectedFiles.set(repoPath, repoFiles);
+        }
+
+        // Get files based on section
+        const files = sectionId === 'tracking' ? status.versioned : status.unversioned;
+        console.log(`Processing ${files.length} files for repo ${repoPath}`);
+
+        if (isChecked) {
+            // Select all files
+            files.forEach(file => repoFiles.add(file));
+        } else {
+            // Unselect all files
+            files.forEach(file => repoFiles.delete(file));
+        }
+    });
+
+    updateView();
+    updateCommitButton();
+}
+
+function toggleDirectoryFiles(repoPath: string, dirPath: string, isChecked: boolean): void {
+    const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], dirPath);
+    if (!subtree) return;
+
+    // Get all files under this directory and its subdirectories
+    const allFiles = getAllFilesUnderTree(subtree);
+
+    // Toggle all files
+    allFiles.forEach(file => {
+        if (isChecked) {
+            selectFile(repoPath, file);
+        } else {
+            unselectFile(repoPath, file);
+        }
+    });
+
+    // Update parent directory checkboxes
+    updateParentDirectoryCheckboxes(repoPath, dirPath);
     
-    // For any node type, find the checkbox within its content div
-    const node = document.getElementById(nodeId);
-    if (!node) {
-        console.log('Node not found:', nodeId);
-        return;
+    // Update child directory checkboxes
+    updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked);
+
+    updateCommitButton();
+}
+
+function getAllFilesUnderTree(tree: FileTreeNode): string[] {
+    if (!tree) return [];
+    
+    let files: string[] = [];
+    
+    // Add files from current directory
+    files.push(...tree._files);
+    
+    // Add files from subdirectories
+    Object.entries(tree).forEach(([key, subtree]) => {
+        if (key !== '_files' && !Array.isArray(subtree)) {
+            const subFiles = getAllFilesUnderTree(subtree);
+            files.push(...subFiles);
+        }
+    });
+    
+    return files;
+}
+
+function getSubtreeFromPath(tree: FileTreeNode, path: string): FileTreeNode | null {
+    if (!path) return tree;
+    
+    const parts = path.split('/');
+    let current: FileTreeNode | null = tree;
+    
+    for (const part of parts) {
+        if (!current || !current[part] || Array.isArray(current[part])) return null;
+        current = current[part] as FileTreeNode;
     }
     
-    const checkbox = node.querySelector('.tree-content input[type="checkbox"]');
-    if (checkbox) {
-        console.log('Found checkbox, clicking');
-        checkbox.click();
-    } else {
-        console.log('No checkbox found in node');
+    return current;
+}
+
+function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string): void {
+    const pathParts = dirPath.split('/');
+    let currentPath = '';
+    
+    // Update each parent directory's checkbox state
+    for (let i = 0; i < pathParts.length; i++) {
+        currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i];
+        const checkbox = document.querySelector(`.directory-checkbox[data-repo="${repoPath}"][data-dir="${currentPath}"]`) as HTMLInputElement;
+        if (checkbox) {
+            const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], currentPath);
+            if (subtree) {
+                const allFiles = getAllFilesUnderTree(subtree);
+                const allSelected = allFiles.length > 0 && allFiles.every(file => isFileSelected(repoPath, file));
+                const someSelected = allFiles.some(file => isFileSelected(repoPath, file));
+                
+                checkbox.checked = allSelected;
+                checkbox.indeterminate = !allSelected && someSelected;
+            }
+        }
     }
 }
 
-function updateCommitButton() {
-    const message = document.getElementById('commit-message').value;
+function updateChildDirectoryCheckboxes(repoPath: string, dirPath: string, isChecked: boolean): void {
+    // Update immediate child checkboxes
+    const selector = `.directory-checkbox[data-repo="${repoPath}"][data-dir^="${dirPath}/"]`;
+    const childCheckboxes = document.querySelectorAll(selector);
+    
+    childCheckboxes.forEach(checkbox => {
+        const childPath = (checkbox as HTMLInputElement).dataset.dir || '';
+        const subtree = getSubtreeFromPath(currentFilesByRepo[repoPath], childPath);
+        if (subtree) {
+            (checkbox as HTMLInputElement).checked = isChecked;
+            (checkbox as HTMLInputElement).indeterminate = false;
+        }
+    });
+}
+
+function selectFile(repoPath: string, file: string): void {
+    const repoFiles = selectedFiles.get(repoPath);
+    if (!repoFiles) {
+        selectedFiles.set(repoPath, new Set([file]));
+    } else {
+        repoFiles.add(file);
+    }
+}
+
+function unselectFile(repoPath: string, file: string): void {
+    const repoFiles = selectedFiles.get(repoPath);
+    if (repoFiles) {
+        repoFiles.delete(file);
+        if (repoFiles.size === 0) {
+            selectedFiles.delete(repoPath);
+        }
+    }
+}
+
+function isFileSelected(repoPath: string, file: string): boolean {
+    const repoFiles = selectedFiles.get(repoPath);
+    return Boolean(repoFiles && repoFiles.has(file));
+}
+
+function updateCommitButton(): void {
+    const message = (document.getElementById('commit-message') as HTMLInputElement)?.value || '';
     const hasFiles = Array.from(selectedFiles.values())
         .some(files => files.size > 0);
-    document.getElementById('commit-button').disabled = !message || !hasFiles;
+    
+    const commitButton = document.getElementById('commit-button') as HTMLButtonElement;
+    if (commitButton) {
+        commitButton.disabled = !message || !hasFiles;
+    }
 }
 
-function commitChanges() {
-    const message = document.getElementById('commit-message').value;
-    const files = [];
+function commitChanges(): void {
+    const message = (document.getElementById('commit-message') as HTMLInputElement)?.value || '';
+    const files: Array<{ repo: string; path: string }> = [];
+    
     for (const [repo, fileSet] of selectedFiles.entries()) {
         for (const file of fileSet) {
             files.push({ repo, path: file });
         }
     }
+    
     vscode.postMessage({
         type: 'commit',
         message,
@@ -619,81 +679,90 @@ function commitChanges() {
     });
 }
 
-window.addEventListener('message', event => {
+function toggleNodeSelection(nodeId: string): void {
+    const node = document.getElementById(nodeId);
+    if (!node) return;
+
+    const checkbox = node.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change'));
+    }
+}
+
+// Event Listeners
+window.addEventListener('message', (event: MessageEvent<any>) => {
     const message = event.data;
     console.log('Received message:', message);
+    
     switch (message.type) {
         case 'updateChanges':
             currentStatus = message.status;
             updateView();
             break;
         case 'toggleViewMode':
-            console.log('Toggling view mode to:', message.isTreeView);
             isTreeView = message.isTreeView;
             updateView();
             break;
     }
 });
 
-document.addEventListener('keydown', handleKeyDown);
-
-function handleKeyDown(event) {
+document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (!focusedNodeId) {
-        // If nothing is focused, focus the first node
+        // If no node is focused, focus the first one
         const firstNode = document.querySelector('.tree-node');
-        if (firstNode) {
-            focusNode(firstNode.id || 'tracking');
+        if (firstNode instanceof HTMLElement) {
+            focusNode(firstNode.id);
         }
         return;
     }
 
     switch (event.key) {
         case 'ArrowUp':
-            event.preventDefault();
-            moveFocus('prev');
+            navigateTree('up');
             break;
         case 'ArrowDown':
-            event.preventDefault();
-            moveFocus('next');
+            navigateTree('down');
+            break;
+        case 'ArrowLeft':
+            if (isNodeExpanded(focusedNodeId)) {
+                toggleNode(focusedNodeId);
+            } else {
+                const parent = findParentNode(focusedNodeId);
+                if (parent) {
+                    focusNode(parent.id);
+                }
+            }
             break;
         case 'ArrowRight':
-            event.preventDefault();
             if (!isNodeExpanded(focusedNodeId)) {
                 toggleNode(focusedNodeId);
             } else {
-                // If already expanded, move to first child
                 const firstChild = document.querySelector(`#children-${focusedNodeId} > .tree-node:first-child`);
-                if (firstChild) {
+                if (firstChild instanceof HTMLElement) {
                     focusNode(firstChild.id);
                 }
             }
             break;
-        case 'ArrowLeft':
-            event.preventDefault();
-            if (isNodeExpanded(focusedNodeId)) {
-                toggleNode(focusedNodeId);
-            } else {
-                // If already collapsed, move to parent
-                const parentNode = findParentNode(focusedNodeId);
-                if (parentNode) {
-                    focusNode(parentNode.id);
+        case ' ':
+        case 'Enter':
+            const node = document.getElementById(focusedNodeId);
+            if (node) {
+                const checkbox = node.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                if (checkbox) {
+                    checkbox.click();
                 }
             }
             break;
-        case ' ':
-            event.preventDefault();
-            toggleNodeSelection(focusedNodeId);
-            break;
     }
-}
+});
 
-function moveFocus(direction) {
+function navigateTree(direction: 'up' | 'down'): void {
     const allNodes = Array.from(document.querySelectorAll('.tree-node'));
     const visibleNodes = allNodes.filter(node => {
-        // Node is visible if it's not inside a collapsed parent
         let parent = node.parentElement;
         while (parent) {
-            if (parent.classList.contains('tree-children') && !parent.classList.contains('expanded')) {
+            if (parent.style.display === 'none') {
                 return false;
             }
             parent = parent.parentElement;
@@ -701,22 +770,23 @@ function moveFocus(direction) {
         return true;
     });
 
-    const currentIndex = visibleNodes.findIndex(node => node.id === focusedNodeId);
-    let newIndex;
+    const currentIndex = visibleNodes.findIndex(node => node instanceof HTMLElement && node.id === focusedNodeId);
+    if (currentIndex === -1) return;
 
-    if (direction === 'next') {
-        newIndex = currentIndex + 1;
-        if (newIndex >= visibleNodes.length) newIndex = 0;
+    let newIndex: number;
+    if (direction === 'up') {
+        newIndex = currentIndex > 0 ? currentIndex - 1 : visibleNodes.length - 1;
     } else {
-        newIndex = currentIndex - 1;
-        if (newIndex < 0) newIndex = visibleNodes.length - 1;
+        newIndex = currentIndex < visibleNodes.length - 1 ? currentIndex + 1 : 0;
     }
 
-    focusNode(visibleNodes[newIndex].id);
+    const newNode = visibleNodes[newIndex];
+    if (newNode instanceof HTMLElement) {
+        focusNode(newNode.id);
+    }
 }
 
-function focusNode(nodeId) {
-    // Remove focus from previous node
+function focusNode(nodeId: string): void {
     if (focusedNodeId) {
         const prevNode = document.getElementById(focusedNodeId);
         if (prevNode) {
@@ -724,21 +794,20 @@ function focusNode(nodeId) {
         }
     }
 
-    // Add focus to new node
-    focusedNodeId = nodeId;
     const newNode = document.getElementById(nodeId);
     if (newNode) {
         newNode.classList.add('focused');
         newNode.scrollIntoView({ block: 'nearest' });
+        focusedNodeId = nodeId;
     }
 }
 
-function isNodeExpanded(nodeId) {
+function isNodeExpanded(nodeId: string): boolean {
     const childrenElement = document.getElementById(`children-${nodeId}`);
-    return childrenElement && childrenElement.classList.contains('expanded');
+    return childrenElement?.style.display === 'block' || false;
 }
 
-function findParentNode(nodeId) {
+function findParentNode(nodeId: string): HTMLElement | null {
     const node = document.getElementById(nodeId);
     if (!node) return null;
 
@@ -752,28 +821,5 @@ function findParentNode(nodeId) {
     return null;
 }
 
-document.getElementById('commit-message').addEventListener('input', updateCommitButton);
-
-function isFileSelected(repoPath, file) {
-    const repoFiles = selectedFiles.get(repoPath);
-    return repoFiles && repoFiles.has(file);
-}
-
-function selectFile(repoPath, file) {
-    const repoFiles = selectedFiles.get(repoPath);
-    if (!repoFiles) {
-        selectedFiles.set(repoPath, new Set([file]));
-    } else {
-        repoFiles.add(file);
-    }
-}
-
-function unselectFile(repoPath, file) {
-    const repoFiles = selectedFiles.get(repoPath);
-    if (repoFiles) {
-        repoFiles.delete(file);
-        if (repoFiles.size === 0) {
-            selectedFiles.delete(repoPath);
-        }
-    }
-}
+// Initialize commit message input handler
+document.getElementById('commit-message')?.addEventListener('input', updateCommitButton);

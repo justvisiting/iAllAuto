@@ -266,14 +266,43 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         await this._updateChanges();
     }
 
-    private async _getHtmlForWebview(webview: vscode.Webview) {
+    private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
+        // Get paths to files
         const htmlPath = path.join(this._extensionPath, 'src', 'webview', 'commit-view.html');
         const cssPath = path.join(this._extensionPath, 'src', 'webview', 'styles.css');
-        const jsPath = path.join(this._extensionPath, 'src', 'webview', 'script.js');
+        const jsOutPath = path.join(this._extensionPath, 'out', 'webview', 'script.js');
+
+        // Compile TypeScript to JavaScript
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const tsc = require.resolve('typescript/bin/tsc');
+                const { spawn } = require('child_process');
+                const compile = spawn('node', [tsc, '-p', path.join(this._extensionPath, 'src', 'webview')]);
+                
+                compile.stdout.on('data', (data: Buffer) => {
+                    console.log(`TypeScript compilation output: ${data}`);
+                });
+                
+                compile.stderr.on('data', (data: Buffer) => {
+                    console.error(`TypeScript compilation error: ${data}`);
+                });
+                
+                compile.on('close', (code: number) => {
+                    if (code === 0) {
+                        resolve();
+                    } else {
+                        reject(new Error(`TypeScript compilation failed with code ${code}`));
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('Failed to compile TypeScript:', error);
+            throw error;
+        }
 
         let html = await fs.promises.readFile(htmlPath, 'utf8');
         const css = await fs.promises.readFile(cssPath, 'utf8');
-        const js = await fs.promises.readFile(jsPath, 'utf8');
+        const js = await fs.promises.readFile(jsOutPath, 'utf8');
 
         // Replace placeholders with actual content
         html = html.replace('/* Content will be replaced with styles.css */', css);
