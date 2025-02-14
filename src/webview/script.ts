@@ -14,10 +14,11 @@ interface FileTreeNode {
     [key: string]: FileTreeNode | string[];
 }
 
-interface FileTreesByType {
+type Section = 'tracking' | 'unversioned';
+
+interface FileTreesBySection {
     [repoPath: string]: {
-        versioned: FileTreeNode;
-        unversioned: FileTreeNode;
+        [section in Section]: FileTreeNode;
     };
 }
 
@@ -46,7 +47,7 @@ interface HTMLElement {
 const vscode: VSCode = acquireVsCodeApi();
 let currentStatus: GitStatus | null = null;
 let selectedFiles: Map<string, Set<string>> = new Map();
-let currentFilesByType: FileTreesByType = {};
+let currentFilesBySection: FileTreesBySection = {};
 let expandedNodes: Set<string> = new Set();
 let focusedNodeId: string | null = null;
 let isTreeView: boolean = true;
@@ -101,7 +102,7 @@ function toggleFile(repoPath: string, file: string): void {
     updateView();
 }
 
-function updateSectionCheckboxState(sectionId: string): void {
+function updateSectionCheckboxState(sectionId: Section): void {
     const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement | null;
     const section = document.getElementById(`children-${sectionId}`);
     if (!section || !checkbox) return;
@@ -133,7 +134,7 @@ function updateSectionCheckboxState(sectionId: string): void {
     }
 }
 
-function toggleSection(sectionId: string, isChecked: boolean): void {
+function toggleSection(sectionId: Section, isChecked: boolean): void {
     const section = document.getElementById(sectionId);
     if (!section) return;
 
@@ -144,11 +145,10 @@ function toggleSection(sectionId: string, isChecked: boolean): void {
     const processedRepos = new Set<string>();
     fileCheckboxes.forEach(checkbox => {
         const repoPath = checkbox.dataset.repo;
-        const type = sectionId === 'tracking' ? 'versioned' : 'unversioned';
         
         if (repoPath && !processedRepos.has(repoPath)) {
             processedRepos.add(repoPath);
-            const fileTree = currentFilesByType[repoPath]?.[type];
+            const fileTree = currentFilesBySection[repoPath]?.[sectionId];
             if (fileTree) {
                 const allFiles = getAllFilesUnderTree(fileTree);
                 allFiles.forEach(file => {
@@ -172,7 +172,7 @@ function toggleSection(sectionId: string, isChecked: boolean): void {
     updateView();
 }
 
-function createSectionNode(sectionId: string, title: string): SectionNode {
+function createSectionNode(sectionId: Section, title: string): SectionNode {
     const sectionNode = document.createElement('div');
     sectionNode.className = 'section';
     sectionNode.id = sectionId;
@@ -202,12 +202,11 @@ function createSectionNode(sectionId: string, title: string): SectionNode {
 }
 
 function updateSectionCheckboxStates(): void {
-    ['tracking', 'unversioned'].forEach(sectionId => {
+    (['tracking', 'unversioned'] as Section[]).forEach(sectionId => {
         const section = document.getElementById(sectionId);
         const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
         if (!section || !sectionCheckbox) return;
 
-        const type = sectionId === 'tracking' ? 'versioned' : 'unversioned';
         const fileCheckboxes = section.querySelectorAll('input[type="checkbox"][data-repo]') as NodeListOf<HTMLInputElement>;
         
         if (fileCheckboxes.length === 0) {
@@ -222,7 +221,7 @@ function updateSectionCheckboxStates(): void {
         fileCheckboxes.forEach(checkbox => {
             const repoPath = checkbox.dataset.repo;
             if (repoPath) {
-                const fileTree = currentFilesByType[repoPath]?.[type];
+                const fileTree = currentFilesBySection[repoPath]?.[sectionId];
                 if (fileTree) {
                     const allFiles = getAllFilesUnderTree(fileTree);
                     const allSelected = allFiles.every(file => isFileSelected(repoPath, file));
@@ -248,7 +247,7 @@ function updateView(): void {
 
     // Clear the root
     root.innerHTML = '';
-    currentFilesByType = {};
+    currentFilesBySection = {};
 
     // Process versioned files (Tracking section)
     const versionedRepos = Object.entries(currentStatus.repositories)
@@ -257,17 +256,17 @@ function updateView(): void {
     if (versionedRepos.length > 0) {
         const { sectionNode, childrenDiv } = createSectionNode('tracking', 'Tracking');
         versionedRepos.forEach(([repoPath, status]) => {
-            // Create file tree for this repo's versioned files
-            if (!currentFilesByType[repoPath]) {
-                currentFilesByType[repoPath] = {
-                    versioned: createFileTree(status.versioned),
+            // Create file tree for this repo's tracking section
+            if (!currentFilesBySection[repoPath]) {
+                currentFilesBySection[repoPath] = {
+                    tracking: createFileTree(status.versioned),
                     unversioned: { _files: [] }
                 };
             } else {
-                currentFilesByType[repoPath].versioned = createFileTree(status.versioned);
+                currentFilesBySection[repoPath].tracking = createFileTree(status.versioned);
             }
 
-            const repoNode = createRepoNode(repoPath, status.versioned, 'versioned');
+            const repoNode = createRepoNode(repoPath, status.versioned, 'tracking');
             if (repoNode) {
                 childrenDiv.appendChild(repoNode);
             }
@@ -282,14 +281,14 @@ function updateView(): void {
     if (unversionedRepos.length > 0) {
         const { sectionNode, childrenDiv } = createSectionNode('unversioned', 'Unversioned');
         unversionedRepos.forEach(([repoPath, status]) => {
-            // Create file tree for this repo's unversioned files
-            if (!currentFilesByType[repoPath]) {
-                currentFilesByType[repoPath] = {
-                    versioned: { _files: [] },
+            // Create file tree for this repo's unversioned section
+            if (!currentFilesBySection[repoPath]) {
+                currentFilesBySection[repoPath] = {
+                    tracking: { _files: [] },
                     unversioned: createFileTree(status.unversioned)
                 };
             } else {
-                currentFilesByType[repoPath].unversioned = createFileTree(status.unversioned);
+                currentFilesBySection[repoPath].unversioned = createFileTree(status.unversioned);
             }
 
             const repoNode = createRepoNode(repoPath, status.unversioned, 'unversioned');
@@ -312,18 +311,12 @@ function updateView(): void {
             toggleElement.className = 'tree-toggle codicon codicon-chevron-down';
         }
     });
-
-    // Update section checkbox states
-    updateSectionCheckboxState('tracking');
-    updateSectionCheckboxState('unversioned');
-
-    updateCommitButton();
 }
 
-function createRepoNode(repoPath: string, files: string[], type: 'versioned' | 'unversioned'): HTMLElement | null {
+function createRepoNode(repoPath: string, files: string[], section: Section): HTMLElement | null {
     if (!files || files.length === 0) return null;
     
-    const repoId = `${type}-${repoPath}`.replace(/[^a-zA-Z0-9-]/g, '-');
+    const repoId = `${section}-${repoPath}`.replace(/[^a-zA-Z0-9-]/g, '-');
     const repoName = repoPath.split('/').pop() || '';
     const repoFiles = selectedFiles.get(repoPath) || new Set();
     const allSelected = files.every(file => repoFiles.has(file));
@@ -352,7 +345,7 @@ function createRepoNode(repoPath: string, files: string[], type: 'versioned' | '
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = allSelected;
-    checkbox.onchange = () => toggleAllFiles(repoPath, type);
+    checkbox.onchange = () => toggleAllFiles(repoPath, section);
 
     // Create repo name span
     const nameSpan = document.createElement('span');
@@ -374,7 +367,7 @@ function createRepoNode(repoPath: string, files: string[], type: 'versioned' | '
 
     if (isTreeView) {
         // Create file tree for hierarchical view
-        const fileTree = currentFilesByType[repoPath]?.[type];
+        const fileTree = currentFilesBySection[repoPath]?.[section];
         if (!fileTree) return null;
         
         // Add directories and files
@@ -382,19 +375,19 @@ function createRepoNode(repoPath: string, files: string[], type: 'versioned' | '
         for (const [dirname, subtree] of entries) {
             if (!Array.isArray(subtree)) {
                 childrenDiv.appendChild(
-                    createDirectoryNode(dirname, dirname, subtree, type, repoPath)
+                    createDirectoryNode(dirname, dirname, subtree, section, repoPath)
                 );
             }
         }
 
         // Add root-level files
         fileTree._files.forEach(file => {
-            childrenDiv.appendChild(createFileNode(repoPath, file, type));
+            childrenDiv.appendChild(createFileNode(repoPath, file, section));
         });
     } else {
         // Flat view - just add all files
         files.forEach(file => {
-            childrenDiv.appendChild(createFileNode(repoPath, file, type));
+            childrenDiv.appendChild(createFileNode(repoPath, file, section));
         });
     }
 
@@ -405,8 +398,8 @@ function createRepoNode(repoPath: string, files: string[], type: 'versioned' | '
     return repoNode;
 }
 
-function toggleAllFiles(repoPath: string, type: 'versioned' | 'unversioned'): void {
-    const fileTree = currentFilesByType[repoPath]?.[type];
+function toggleAllFiles(repoPath: string, section: Section): void {
+    const fileTree = currentFilesBySection[repoPath]?.[section];
     if (!fileTree) return;
 
     const allFiles = getAllFilesUnderTree(fileTree);
@@ -445,8 +438,8 @@ function createFileTree(files: string[]): FileTreeNode {
     return tree;
 }
 
-function createDirectoryNode(path: string, name: string, tree: FileTreeNode, type: 'versioned' | 'unversioned', repoPath: string): HTMLDivElement {
-    const dirId = `${type}-${repoPath}-${path}`.replace(/[^a-zA-Z0-9-]/g, '-');
+function createDirectoryNode(path: string, name: string, tree: FileTreeNode, section: Section, repoPath: string): HTMLDivElement {
+    const dirId = `${section}-${repoPath}-${path}`.replace(/[^a-zA-Z0-9-]/g, '-');
     const files = tree._files;
     const dirs = Object.entries(tree).filter(([key]) => key !== '_files');
 
@@ -476,7 +469,7 @@ function createDirectoryNode(path: string, name: string, tree: FileTreeNode, typ
     checkbox.className = 'directory-checkbox';
     checkbox.dataset.repo = repoPath;
     checkbox.dataset.dir = path;
-    checkbox.onchange = (e: Event) => toggleDirectoryFiles(repoPath, path, (e.target as HTMLInputElement).checked, type);
+    checkbox.onchange = (e: Event) => toggleDirectoryFiles(repoPath, path, (e.target as HTMLInputElement).checked, section);
 
     // Get all files under this directory for checkbox state
     const allFiles = getAllFilesUnderTree(tree);
@@ -507,14 +500,14 @@ function createDirectoryNode(path: string, name: string, tree: FileTreeNode, typ
         if (!Array.isArray(subtree) && dirname !== '_files') {
             const subdirPath = path ? `${path}/${dirname}` : dirname;
             childrenDiv.appendChild(
-                createDirectoryNode(subdirPath, dirname, subtree, type, repoPath)
+                createDirectoryNode(subdirPath, dirname, subtree, section, repoPath)
             );
         }
     });
 
     // Add files
     files.forEach(file => {
-        childrenDiv.appendChild(createFileNode(repoPath, file, type));
+        childrenDiv.appendChild(createFileNode(repoPath, file, section));
     });
 
     // Assemble the final directory node
@@ -524,8 +517,8 @@ function createDirectoryNode(path: string, name: string, tree: FileTreeNode, typ
     return dirNode;
 }
 
-function createFileNode(repoPath: string, file: string, type: 'versioned' | 'unversioned'): HTMLDivElement {
-    const fileId = `${type}-${repoPath}-${file}`.replace(/[^a-zA-Z0-9-]/g, '-');
+function createFileNode(repoPath: string, file: string, section: Section): HTMLDivElement {
+    const fileId = `${section}-${repoPath}-${file}`.replace(/[^a-zA-Z0-9-]/g, '-');
     const fileName = file.split('/').pop() || '';
     const repoFiles = selectedFiles.get(repoPath) || new Set();
 
@@ -537,7 +530,7 @@ function createFileNode(repoPath: string, file: string, type: 'versioned' | 'unv
 
     // Create content wrapper
     const contentDiv = document.createElement('div');
-    contentDiv.className = `tree-content file-node ${type}`;
+    contentDiv.className = `tree-content file-node ${section}`;
 
     // Create empty toggle span (for alignment)
     const toggleSpan = document.createElement('span');
@@ -571,7 +564,7 @@ function createFileNode(repoPath: string, file: string, type: 'versioned' | 'unv
     return fileNode;
 }
 
-function toggleAllInSection(sectionId: string): void {
+function toggleAllInSection(sectionId: Section): void {
     console.log(`Toggling all files in section: ${sectionId}`);
     const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement;
     if (!checkbox || !currentStatus) return;
@@ -610,8 +603,8 @@ function toggleAllInSection(sectionId: string): void {
     updateCommitButton();
 }
 
-function toggleDirectoryFiles(repoPath: string, dirPath: string, isChecked: boolean, type: 'versioned' | 'unversioned'): void {
-    const fileTree = currentFilesByType[repoPath]?.[type];
+function toggleDirectoryFiles(repoPath: string, dirPath: string, isChecked: boolean, section: Section): void {
+    const fileTree = currentFilesBySection[repoPath]?.[section];
     if (!fileTree) return;
 
     const subtree = getSubtreeFromPath(fileTree, dirPath);
@@ -630,23 +623,23 @@ function toggleDirectoryFiles(repoPath: string, dirPath: string, isChecked: bool
     });
 
     // Update parent directory checkboxes
-    updateParentDirectoryCheckboxes(repoPath, dirPath, type);
+    updateParentDirectoryCheckboxes(repoPath, dirPath, section);
     
     // Update child directory checkboxes
-    updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked, type);
+    updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked, section);
 
     updateCommitButton();
     updateView();
 }
 
-function updateChildDirectoryCheckboxes(repoPath: string, dirPath: string, isChecked: boolean, type: 'versioned' | 'unversioned'): void {
+function updateChildDirectoryCheckboxes(repoPath: string, dirPath: string, isChecked: boolean, section: Section): void {
     // Update immediate child checkboxes
     const selector = `.directory-checkbox[data-repo="${repoPath}"][data-dir^="${dirPath}/"]`;
     const childCheckboxes = document.querySelectorAll(selector);
     
     childCheckboxes.forEach(checkbox => {
         const childPath = (checkbox as HTMLInputElement).dataset.dir || '';
-        const subtree = getSubtreeFromPath(currentFilesByType[repoPath]?.[type], childPath);
+        const subtree = getSubtreeFromPath(currentFilesBySection[repoPath]?.[section], childPath);
         if (subtree) {
             (checkbox as HTMLInputElement).checked = isChecked;
             (checkbox as HTMLInputElement).indeterminate = false;
@@ -687,7 +680,7 @@ function getSubtreeFromPath(tree: FileTreeNode, path: string): FileTreeNode | nu
     return current;
 }
 
-function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, type: 'versioned' | 'unversioned'): void {
+function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section): void {
     const pathParts = dirPath.split('/');
     let currentPath = '';
     
@@ -696,7 +689,7 @@ function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, type
         currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i];
         const checkbox = document.querySelector(`.directory-checkbox[data-repo="${repoPath}"][data-dir="${currentPath}"]`) as HTMLInputElement;
         if (checkbox) {
-            const subtree = getSubtreeFromPath(currentFilesByType[repoPath]?.[type], currentPath);
+            const subtree = getSubtreeFromPath(currentFilesBySection[repoPath]?.[section], currentPath);
             if (subtree) {
                 const allFiles = getAllFilesUnderTree(subtree);
                 const allSelected = allFiles.length > 0 && allFiles.every(file => isFileSelected(repoPath, file));
