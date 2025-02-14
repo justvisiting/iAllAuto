@@ -80,6 +80,10 @@ body {
     cursor: pointer;
 }
 
+.tree-content:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
 .tree-toggle {
     cursor: pointer;
     user-select: none;
@@ -267,4 +271,27 @@ input[type="checkbox"] {
 .tree-label .codicon {
     font-size: 16px;
     margin-right: 4px;
+}
+
+/* Focus styles */
+.tree-node:focus,
+.section:focus {
+    outline: none;
+}
+
+.tree-node:focus > .tree-content,
+.section:focus > .section-title {
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.tree-node:focus > .tree-content .codicon,
+.section:focus > .section-title .codicon {
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+/* Hover styles */
+.tree-content:hover,
+.section-title:hover {
+    background-color: var(--vscode-list-hoverBackground);
 }

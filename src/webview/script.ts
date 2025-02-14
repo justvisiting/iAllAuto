@@ -176,6 +176,7 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
     const sectionNode = document.createElement('div');
     sectionNode.className = 'section';
     sectionNode.id = sectionId;
+    sectionNode.tabIndex = 0; // Make section focusable
 
     const titleDiv = document.createElement('div');
     titleDiv.className = 'section-title';
@@ -765,6 +766,156 @@ function toggleNodeSelection(nodeId: string): void {
     }
 }
 
+function getNextVisibleNode(currentNode: HTMLElement | null, direction: 'up' | 'down'): HTMLElement | null {
+    if (!currentNode) return null;
+
+    // Helper function to check if a node is visible
+    const isNodeVisible = (node: HTMLElement): boolean => {
+        let current: HTMLElement | null = node;
+        while (current && current.id !== 'tree-root') {
+            if (current.style.display === 'none') return false;
+            if (current.classList.contains('tree-children')) {
+                const parentToggle = current.previousElementSibling?.querySelector('.tree-toggle');
+                if (parentToggle?.classList.contains('codicon-chevron-right')) return false;
+            }
+            current = current.parentElement;
+        }
+        return true;
+    };
+
+    // Helper function to get all focusable nodes
+    const getAllFocusableNodes = (): HTMLElement[] => {
+        return Array.from(document.querySelectorAll('.tree-node, .section'));
+    };
+
+    const allNodes = getAllFocusableNodes();
+    const currentIndex = allNodes.indexOf(currentNode);
+    
+    if (currentIndex === -1) return null;
+
+    if (direction === 'down') {
+        // Find next visible node
+        for (let i = currentIndex + 1; i < allNodes.length; i++) {
+            if (isNodeVisible(allNodes[i])) {
+                return allNodes[i];
+            }
+        }
+    } else {
+        // Find previous visible node
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            if (isNodeVisible(allNodes[i])) {
+                return allNodes[i];
+            }
+        }
+    }
+
+    return null;
+}
+
+function focusNode(node: HTMLElement): void {
+    // Remove focus from previously focused node
+    if (focusedNodeId) {
+        const prevNode = document.getElementById(focusedNodeId);
+        if (prevNode) {
+            prevNode.blur();
+        }
+    }
+
+    // Focus the new node
+    focusedNodeId = node.id;
+    node.focus();
+    node.scrollIntoView({ block: 'nearest' });
+}
+
+function handleKeyboardNavigation(event: KeyboardEvent): void {
+    const currentNode = focusedNodeId ? document.getElementById(focusedNodeId) : null;
+    let nextNode: HTMLElement | null = null;
+
+    switch (event.key) {
+        case 'ArrowUp':
+            event.preventDefault();
+            nextNode = getNextVisibleNode(currentNode as HTMLElement, 'up');
+            break;
+
+        case 'ArrowDown':
+            event.preventDefault();
+            nextNode = getNextVisibleNode(currentNode as HTMLElement, 'down');
+            break;
+
+        case 'ArrowRight':
+            if (currentNode) {
+                event.preventDefault();
+                if (currentNode.classList.contains('section')) {
+                    // For sections, just expand the section if it's collapsed
+                    const childrenDiv = currentNode.querySelector('.section-children') as HTMLElement;
+                    if (childrenDiv && childrenDiv.style.display === 'none') {
+                        childrenDiv.style.display = 'block';
+                        // Focus first child if available
+                        const firstChild = childrenDiv.querySelector('.tree-node, .section') as HTMLElement;
+                        if (firstChild) {
+                            nextNode = firstChild;
+                        }
+                    }
+                } else {
+                    // For tree nodes, use the toggle button
+                    const toggleButton = currentNode.querySelector('.tree-toggle');
+                    if (toggleButton?.classList.contains('codicon-chevron-right')) {
+                        toggleNode(currentNode.id);
+                        // Focus first child if available
+                        const childrenDiv = document.getElementById(`children-${currentNode.id}`);
+                        if (childrenDiv) {
+                            const firstChild = childrenDiv.querySelector('.tree-node') as HTMLElement;
+                            if (firstChild) {
+                                nextNode = firstChild;
+                            }
+                        }
+                    }
+                }
+            }
+            break;
+
+        case 'ArrowLeft':
+            if (currentNode) {
+                event.preventDefault();
+                if (currentNode.classList.contains('section')) {
+                    // For sections, just collapse the section if it's expanded
+                    const childrenDiv = currentNode.querySelector('.section-children') as HTMLElement;
+                    if (childrenDiv && childrenDiv.style.display === 'block') {
+                        childrenDiv.style.display = 'none';
+                    }
+                } else {
+                    // For tree nodes, handle collapse or move to parent
+                    const toggleButton = currentNode.querySelector('.tree-toggle');
+                    if (toggleButton?.classList.contains('codicon-chevron-down')) {
+                        toggleNode(currentNode.id);
+                    } else {
+                        // If already collapsed, move to parent
+                        const parentElement = currentNode.parentElement?.closest('.tree-node, .section');
+                        if (parentElement instanceof HTMLElement) {
+                            nextNode = parentElement;
+                        }
+                    }
+                }
+            }
+            break;
+
+        case ' ':
+        case 'Enter':
+            if (currentNode) {
+                event.preventDefault();
+                const checkbox = currentNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                if (checkbox) {
+                    checkbox.click();
+                }
+            }
+            break;
+    }
+
+    if (nextNode) {
+        focusNode(nextNode);
+    }
+}
+
 // Event Listeners
 window.addEventListener('message', (event: MessageEvent<any>) => {
     const message = event.data;
@@ -779,122 +930,26 @@ window.addEventListener('message', (event: MessageEvent<any>) => {
             isTreeView = message.isTreeView;
             updateView();
             break;
+        case 'error':
+            console.error('Error:', message.error);
+            break;
+        default:
+            console.warn('Unknown message type:', message.type);
     }
 });
 
 document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (!focusedNodeId) {
-        // If no node is focused, focus the first one
-        const firstNode = document.querySelector('.tree-node');
-        if (firstNode instanceof HTMLElement) {
-            focusNode(firstNode.id);
+        // If no node is focused, focus the first visible node
+        const firstNode = getNextVisibleNode(document.querySelector('.tree-node, .section'), 'down');
+        if (firstNode) {
+            focusNode(firstNode);
+            event.preventDefault();
+            return;
         }
-        return;
     }
-
-    switch (event.key) {
-        case 'ArrowUp':
-            navigateTree('up');
-            break;
-        case 'ArrowDown':
-            navigateTree('down');
-            break;
-        case 'ArrowLeft':
-            if (isNodeExpanded(focusedNodeId)) {
-                toggleNode(focusedNodeId);
-            } else {
-                const parent = findParentNode(focusedNodeId);
-                if (parent) {
-                    focusNode(parent.id);
-                }
-            }
-            break;
-        case 'ArrowRight':
-            if (!isNodeExpanded(focusedNodeId)) {
-                toggleNode(focusedNodeId);
-            } else {
-                const firstChild = document.querySelector(`#children-${focusedNodeId} > .tree-node:first-child`);
-                if (firstChild instanceof HTMLElement) {
-                    focusNode(firstChild.id);
-                }
-            }
-            break;
-        case ' ':
-        case 'Enter':
-            const node = document.getElementById(focusedNodeId);
-            if (node) {
-                const checkbox = node.querySelector('input[type="checkbox"]') as HTMLInputElement;
-                if (checkbox) {
-                    checkbox.click();
-                }
-            }
-            break;
-    }
+    
+    handleKeyboardNavigation(event);
 });
 
-function navigateTree(direction: 'up' | 'down'): void {
-    const allNodes = Array.from(document.querySelectorAll('.tree-node'));
-    const visibleNodes = allNodes.filter(node => {
-        let parent = node.parentElement;
-        while (parent) {
-            if (parent.style.display === 'none') {
-                return false;
-            }
-            parent = parent.parentElement;
-        }
-        return true;
-    });
-
-    const currentIndex = visibleNodes.findIndex(node => node instanceof HTMLElement && node.id === focusedNodeId);
-    if (currentIndex === -1) return;
-
-    let newIndex: number;
-    if (direction === 'up') {
-        newIndex = currentIndex > 0 ? currentIndex - 1 : visibleNodes.length - 1;
-    } else {
-        newIndex = currentIndex < visibleNodes.length - 1 ? currentIndex + 1 : 0;
-    }
-
-    const newNode = visibleNodes[newIndex];
-    if (newNode instanceof HTMLElement) {
-        focusNode(newNode.id);
-    }
-}
-
-function focusNode(nodeId: string): void {
-    if (focusedNodeId) {
-        const prevNode = document.getElementById(focusedNodeId);
-        if (prevNode) {
-            prevNode.classList.remove('focused');
-        }
-    }
-
-    const newNode = document.getElementById(nodeId);
-    if (newNode) {
-        newNode.classList.add('focused');
-        newNode.scrollIntoView({ block: 'nearest' });
-        focusedNodeId = nodeId;
-    }
-}
-
-function isNodeExpanded(nodeId: string): boolean {
-    const childrenElement = document.getElementById(`children-${nodeId}`);
-    return childrenElement?.style.display === 'block' || false;
-}
-
-function findParentNode(nodeId: string): HTMLElement | null {
-    const node = document.getElementById(nodeId);
-    if (!node) return null;
-
-    let parent = node.parentElement;
-    while (parent) {
-        if (parent.classList.contains('tree-node')) {
-            return parent;
-        }
-        parent = parent.parentElement;
-    }
-    return null;
-}
-
-// Initialize commit message input handler
 document.getElementById('commit-message')?.addEventListener('input', updateCommitButton);
