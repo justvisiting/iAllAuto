@@ -577,6 +577,9 @@ function createDirectoryNode(path: string, name: string, tree: FileTreeNode, sec
     dirNode.appendChild(contentDiv);
     dirNode.appendChild(childrenDiv);
 
+    // Add click handler
+    addClickHandler(dirNode);
+
     return dirNode;
 }
 
@@ -623,6 +626,9 @@ function createFileNode(repoPath: string, file: string, section: Section): HTMLD
 
     // Assemble the final file node
     fileNode.appendChild(contentDiv);
+
+    // Add click handler
+    addClickHandler(fileNode);
 
     return fileNode;
 }
@@ -968,6 +974,28 @@ function handleKeyboardNavigation(event: KeyboardEvent): void {
 
     if (nextNode) {
         focusNode(nextNode);
+    }
+}
+
+function addClickHandler(node: HTMLElement) {
+    // Add click handler to the content div instead of the whole node
+    const contentDiv = node.querySelector('.tree-content, .section-title') as HTMLElement;
+    if (contentDiv) {
+        contentDiv.addEventListener('click', (event) => {
+            // Don't handle if clicking checkbox or toggle
+            const target = event.target as HTMLElement;
+            if (target.tagName === 'INPUT' || target.classList.contains('tree-toggle')) {
+                return;
+            }
+
+            // Stop event from bubbling to parent nodes
+            event.stopPropagation();
+
+            // Update both visual and keyboard focus
+            focusedNodeId = node.id;
+            node.focus();
+            node.scrollIntoView({ block: 'nearest' });
+        });
     }
 }
 
