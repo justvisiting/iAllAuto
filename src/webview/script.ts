@@ -80,26 +80,34 @@ function toggleNode(nodeId: string): void {
 }
 
 function toggleFile(repoPath: string, file: string): void {
-    console.log(`Toggling file: ${file} in repo: ${repoPath}`);
+    console.log(`[toggleFile] Toggling file: ${file} in repo: ${repoPath}`);
     let repoFiles = selectedFiles.get(repoPath);
     if (!repoFiles) {
+        console.log(`[toggleFile] Creating new Set for repo: ${repoPath}`);
         repoFiles = new Set();
         selectedFiles.set(repoPath, repoFiles);
     }
 
     if (repoFiles.has(file)) {
-        console.log(`Unselecting file: ${file}`);
+        console.log(`[toggleFile] Unselecting file: ${file}`);
         repoFiles.delete(file);
     } else {
-        console.log(`Selecting file: ${file}`);
+        console.log(`[toggleFile] Selecting file: ${file}`);
         repoFiles.add(file);
     }
+
+    // Log selected files
+    console.log('[toggleFile] Current selectedFiles Map:', Array.from(selectedFiles.entries()).map(([repo, files]) => ({
+        repo,
+        files: Array.from(files)
+    })));
 
     // Update section checkbox state
     const section = file.startsWith('.') ? 'unversioned' : 'tracking';
     updateSectionCheckboxState(section);
 
-    updateView();
+    // Update commit button state
+    updateCommitButton();
 }
 
 function updateSectionCheckboxState(sectionId: Section): void {
@@ -728,39 +736,70 @@ function isFileSelected(repoPath: string, file: string): boolean {
 }
 
 function updateCommitButton(): void {
-    const message = (document.getElementById('commit-message') as HTMLInputElement)?.value || '';
-    const hasFiles = Array.from(selectedFiles.values())
-        .some(files => files.size > 0);
-    
     const commitButton = document.getElementById('commit-button') as HTMLButtonElement;
+    const commitMessage = document.getElementById('commit-message') as HTMLTextAreaElement;
+    
+    // Log current state
+    console.log('[updateCommitButton] Commit message:', commitMessage?.value);
+    console.log('[updateCommitButton] Selected files:', Array.from(selectedFiles.entries()).map(([repo, files]) => ({
+        repo,
+        files: Array.from(files)
+    })));
+    
+    const hasSelectedFiles = Array.from(selectedFiles.values()).some(files => files.size > 0);
+    console.log('[updateCommitButton] Has selected files:', hasSelectedFiles);
+    
     if (commitButton) {
-        commitButton.disabled = !message || !hasFiles;
+        const isEnabled = commitMessage.value.trim() !== '' && hasSelectedFiles;
+        console.log('[updateCommitButton] Button enabled:', isEnabled);
+        commitButton.disabled = !isEnabled;
     }
 }
 
+function getSelectedPaths(): Array<{ path: string, repo: string }> {
+    console.log('[getSelectedPaths] Getting selected paths...');
+    
+    const selectedPaths: Array<{ path: string, repo: string }> = [];
+    selectedFiles.forEach((files, repoPath) => {
+        console.log(`[getSelectedPaths] Processing repo: ${repoPath}, files:`, Array.from(files));
+        files.forEach(file => {
+            console.log(`[getSelectedPaths] Adding file: ${file} from repo: ${repoPath}`);
+            selectedPaths.push({
+                path: file,
+                repo: repoPath
+            });
+        });
+    });
+    console.log('[getSelectedPaths] Final selected paths:', selectedPaths);
+    return selectedPaths;
+}
+
 function handleCommit(): void {
+    console.log('[handleCommit] Starting commit...');
     const commitMessage = (document.getElementById('commit-message') as HTMLTextAreaElement).value;
-    const selectedFiles = getSelectedPaths();
+    console.log('[handleCommit] Commit message:', commitMessage);
 
-    if (selectedFiles.length === 0) {
-        updateStatusMessage('No files selected for commit', 'error');
-        return;
-    }
+    const selectedPaths = getSelectedPaths();
+    console.log('[handleCommit] Selected paths:', selectedPaths);
 
-    if (!commitMessage.trim()) {
+    if (!commitMessage) {
+        console.warn('[handleCommit] No commit message provided');
         updateStatusMessage('Please enter a commit message', 'error');
         return;
     }
 
+    if (selectedPaths.length === 0) {
+        console.warn('[handleCommit] No files selected');
+        updateStatusMessage('Please select files to commit', 'error');
+        return;
+    }
+
+    console.log('[handleCommit] Sending commit message to VS Code');
     vscode.postMessage({
         type: 'commit',
-        files: selectedFiles,
-        message: commitMessage
+        message: commitMessage,
+        files: selectedPaths
     });
-
-    // Clear the commit message
-    (document.getElementById('commit-message') as HTMLTextAreaElement).value = '';
-    updateCommitButton();
 }
 
 function toggleNodeSelection(nodeId: string): void {
@@ -924,21 +963,40 @@ function handleKeyboardNavigation(event: KeyboardEvent): void {
     }
 }
 
-function getSelectedPaths(): string[] {
-    const selectedPaths: string[] = [];
-    const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('[init] Setting up commit button handler');
+    const commitButton = document.getElementById('commit-button');
+    console.log('[init] Found commit button:', commitButton);
     
-    checkboxes.forEach((checkbox) => {
-        const element = checkbox as HTMLInputElement;
-        const dataset = element.dataset;
-        if (dataset.repo && dataset.dir && dataset.file) {
-            const path = `${dataset.repo}/${dataset.dir}/${dataset.file}`;
-            selectedPaths.push(path);
-        }
-    });
+    if (commitButton) {
+        commitButton.addEventListener('click', () => {
+            console.log('[commit-button] Commit button clicked');
+            handleCommit();
+        });
+    }
+});
 
-    return selectedPaths;
-}
+document.addEventListener('keydown', (event: KeyboardEvent) => {
+    // Don't handle keyboard events if commit message has focus
+    const commitMessage = document.getElementById('commit-message');
+    if (commitMessage && document.activeElement === commitMessage) {
+        return;
+    }
+
+    if (!focusedNodeId) {
+        // If no node is focused, focus the first visible node
+        const firstNode = getNextVisibleNode(document.querySelector('.tree-node, .section'), 'down');
+        if (firstNode) {
+            focusNode(firstNode);
+            event.preventDefault();
+            return;
+        }
+    }
+    
+    handleKeyboardNavigation(event);
+});
+
+document.getElementById('commit-message')?.addEventListener('input', updateCommitButton);
 
 function showPushPrompt(): void {
     const pushPrompt = document.createElement('div');
@@ -1011,24 +1069,20 @@ window.addEventListener('message', (event: MessageEvent<any>) => {
         case 'commitSuccess':
             updateStatusMessage('Changes committed successfully');
             showPushPrompt();
+            // Clear commit message after successful commit
+            const commitMessage = document.getElementById('commit-message') as HTMLTextAreaElement;
+            if (commitMessage) {
+                commitMessage.value = '';
+                updateCommitButton();
+            }
+            break;
+        case 'pushSuccess':
+            updateStatusMessage('Changes pushed successfully!', 'success');
+            break;
+        case 'pushError':
+            updateStatusMessage('Failed to push changes: ' + message.error, 'error');
             break;
         default:
             console.warn('Unknown message type:', message.type);
     }
 });
-
-document.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (!focusedNodeId) {
-        // If no node is focused, focus the first visible node
-        const firstNode = getNextVisibleNode(document.querySelector('.tree-node, .section'), 'down');
-        if (firstNode) {
-            focusNode(firstNode);
-            event.preventDefault();
-            return;
-        }
-    }
-    
-    handleKeyboardNavigation(event);
-});
-
-document.getElementById('commit-message')?.addEventListener('input', updateCommitButton);
