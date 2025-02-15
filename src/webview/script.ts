@@ -274,18 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         commitMessage.addEventListener('input', updateCommitButton);
     }
     
-    // Set up keyboard navigation
-    document.addEventListener('keydown', (event: KeyboardEvent) => {
-        if (!focusedNodeId) {
-            const firstNode = getNextVisibleNode(document.querySelector('.tree-node, .section'), 'down');
-            if (firstNode) {
-                focusNode(firstNode);
-                event.preventDefault();
-                return;
-            }
-        }
-        handleKeyboardNavigation(event);
-    });
+        
 });
 
 function updateView(): void {
@@ -486,8 +475,8 @@ function toggleSection(sectionId: Section, isChecked: boolean): void {
         sectionCheckbox.indeterminate = false;
     }
 
-    updateSectionCheckboxStates();
-    updateView();
+    //updateSectionCheckboxStates();
+    //updateView();
 }
 
 function createSectionNode(sectionId: Section, title: string): SectionNode {
@@ -526,36 +515,7 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
     return { sectionNode, childrenDiv };
 }
 
-/*function toggleSection(section: Section, checked: boolean): void {
-    log(`Toggling section ${section} to ${checked}`);
-    
-    // Get all repo checkboxes for this section
-    const repoCheckboxes = document.querySelectorAll<HTMLInputElement>(
-        `input[type="checkbox"][data-section="${section}"]:not([data-dir]):not([data-file])`
-    );
-    
-    // Update each repo
-    repoCheckboxes.forEach(checkbox => {
-        const repoPath = checkbox.dataset.repo;
-        if (repoPath) {
-            toggleRepoFiles(repoPath, checked, section);
-        }
-    });
-    
-    // Update the section checkbox
-    const sectionCheckbox = document.querySelector<HTMLInputElement>(
-        `input[type="checkbox"].section-checkbox[data-section="${section}"]`
-    );
-    
-    if (sectionCheckbox) {
-        sectionCheckbox.checked = checked;
-        sectionCheckbox.indeterminate = false;
-    }
-    
-    // Update commit button state
-    updateCommitButton();
-}
-*/
+
 
 function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
     log(`Toggling directory ${dirPath} in repo ${repoPath} to ${checked}`);
@@ -923,96 +883,6 @@ function focusNode(node: TreeNode): void {
     node.scrollIntoView({ block: 'nearest' });
 }
 
-function handleKeyboardNavigation(event: KeyboardEvent): void {
-    const currentNode = focusedNodeId ? document.getElementById(focusedNodeId) : null;
-    let nextNode: TreeNode | null = null;
-
-    switch (event.key) {
-        case 'ArrowUp':
-            if (currentNode) {
-                event.preventDefault();
-                nextNode = getNextVisibleNode(currentNode as TreeNode, 'up');
-            }
-            break;
-
-        case 'ArrowDown':
-            if (currentNode) {
-                event.preventDefault();
-                nextNode = getNextVisibleNode(currentNode as TreeNode, 'down');
-            }
-            break;
-
-        case 'ArrowRight':
-            if (currentNode) {
-                event.preventDefault();
-                if (currentNode.classList.contains('section')) {
-                    const childrenDiv = currentNode.querySelector('.section-children') as TreeNode;
-                    if (childrenDiv && childrenDiv.style.display === 'none') {
-                        childrenDiv.style.display = 'block';
-                        const firstChild = childrenDiv.querySelector('.tree-node, .section');
-                        if (isTreeNode(firstChild)) {
-                            nextNode = firstChild;
-                        }
-                    }
-                } else {
-                    if (!currentNode.classList.contains('expanded')) {
-                        toggleNode(currentNode.id);
-                        const childrenDiv = document.getElementById(`children-${currentNode.id}`);
-                        if (childrenDiv) {
-                            const firstChild = childrenDiv.querySelector('.tree-node');
-                            if (isTreeNode(firstChild)) {
-                                nextNode = firstChild;
-                            }
-                        }
-                    }
-                }
-            }
-            break;
-
-        case 'ArrowLeft':
-            if (currentNode) {
-                event.preventDefault();
-                if (currentNode.classList.contains('section')) {
-                    const childrenDiv = currentNode.querySelector('.section-children') as TreeNode;
-                    if (childrenDiv && childrenDiv.style.display === 'block') {
-                        childrenDiv.style.display = 'none';
-                    }
-                } else {
-                    if (currentNode.classList.contains('expanded')) {
-                        toggleNode(currentNode.id);
-                    } else {
-                        const parent = currentNode.parentElement;
-                        if (parent) {
-                            const parentElement = parent.closest('.tree-node, .section');
-                            if (isTreeNode(parentElement)) {
-                                nextNode = parentElement;
-                            }
-                        }
-                    }
-                }
-            }
-            break;
-
-        case ' ':
-        case 'Enter':
-            if (currentNode) {
-                event.preventDefault();
-                const section = currentNode.closest('.tracked-section, .untracked-section, .staged-section');
-                if (isTreeNode(section)) {
-                    const checkbox = currentNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
-                    if (checkbox) {
-                        checkbox.checked = !checkbox.checked;
-                        checkbox.dispatchEvent(new Event('change'));
-                    }
-                }
-            }
-            break;
-    }
-
-    if (nextNode) {
-        focusNode(nextNode);
-    }
-}
 
 function isTreeNode(element: Element | null): element is TreeNode {
     return element !== null && element.classList.contains('tree-node');
