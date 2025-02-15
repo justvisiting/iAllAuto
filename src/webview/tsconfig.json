@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "none",
+    "module": "es6",
     "target": "es2015",
     "lib": ["es2015", "dom"],
     "outDir": "../../out/webview",
@@ -9,9 +9,12 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node"
   },
-  "include": ["script.ts"],
+  "include": [
+    "*.ts"
+  ],
   "exclude": [
     "node_modules",
     ".vscode-test"

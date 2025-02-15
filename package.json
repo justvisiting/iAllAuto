@@ -30,6 +30,11 @@
           "id": "iallAutoCommitView",
           "name": "Ch",
           "icon": "resources/icon.svg"
+        },
+        {
+          "id": "iallAutoFileTree",
+          "name": "Files",
+          "icon": "resources/icon.svg"
         }
       ]
     },
@@ -53,6 +58,11 @@
         "command": "iallAutoCommit.toggleViewMode",
         "title": "Toggle View Mode",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "iallAutoFileTree.refresh",
+        "title": "Refresh File Tree",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -66,36 +76,50 @@
           "command": "iallAutoCommit.toggleViewMode",
           "when": "view == iallAutoCommitView",
           "group": "navigation"
+        },
+        {
+          "command": "iallAutoFileTree.refresh",
+          "when": "view == iallAutoFileTree",
+          "group": "navigation"
         }
       ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && webpack --mode development",
-    "watch": "webpack --watch --mode development",
-    "dev": "webpack --watch --mode development & node dev-server.js",
-    "pretest": "npm run compile && npm run lint",
+    "vs-extension": "webpack --mode production && vscode-test-web --extensionDevelopmentPath .",
+    "dev.html": "webpack serve --mode development --env development --env page=dev",
+    "tree.html": "webpack serve --mode development --env development --env page=tree",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
     "@types/node": "18.x",
     "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0",
-    "@vscode/test-cli": "^0.0.4",
-    "@vscode/test-electron": "^2.3.8",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
+    "@vscode/test-web": "^0.0.50",
     "eslint": "^8.56.0",
+    "html-webpack-plugin": "^5.6.0",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^6.9.1",
+    "style-loader": "^3.3.4",
     "source-map-loader": "^5.0.0",
     "ts-loader": "^9.5.2",
     "typescript": "^5.3.3",
     "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1"
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.0"
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.36",
-    "simple-git": "^3.22.0"
+    "simple-git": "^3.22.0",
+    "@vscode/webview-ui-toolkit": "^1.4.0"
   }
 }

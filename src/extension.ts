@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { simpleGit, SimpleGit } from 'simple-git';
+import { FileTreeProvider, FileTreeItem } from './fileTreeProvider';
 
 interface GitRepositoryConfig {
     baseFolders?: string[];
@@ -363,6 +364,35 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    console.log('Activating iAllAuto extension...');
+
+    // Initialize the tree view provider
+    const workspaceRoot = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+        ? vscode.workspace.workspaceFolders[0].uri.fsPath
+        : '';
+    
+    const fileTreeProvider = new FileTreeProvider(workspaceRoot);
+    const treeView = vscode.window.createTreeView('iallAutoFileTree', {
+        treeDataProvider: fileTreeProvider,
+        showCheckboxes: true
+    });
+
+    // Register tree view refresh command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('iallAutoFileTree.refresh', () => fileTreeProvider.refresh()),
+        treeView
+    );
+
+    // Handle checkbox state changes
+    treeView.onDidChangeCheckboxState(e => {
+        e.items.forEach(item => {
+            const treeItem = item[0];
+            const checked = item[1];
+            console.log(`Item ${treeItem.label} checkbox state changed to ${checked}`);
+            // Handle checkbox state change here
+        });
+    });
+
     try {
         // Initialize repositories and provider
         findGitRepositories().then(repositories => {

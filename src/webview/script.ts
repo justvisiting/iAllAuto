@@ -1,13 +1,5 @@
 // Type declarations
-declare const acquireVsCodeApi: () => {
-    postMessage: (message: any) => void;
-    setState: (state: any) => void;
-    getState: () => any;
-};
-
-interface VSCode {
-    postMessage: (message: any) => void;
-}
+import { VSCodeAPI } from './types';
 
 interface FileTreeNode {
     _files: string[];
@@ -81,7 +73,9 @@ function joinPath(...parts: string[]): string {
     return parts.join('/').replace(/\/+/g, '/');
 }
 
-const vscode = acquireVsCodeApi();
+// Initialize VS Code API
+const vscodeApi = acquireVsCodeApi();
+
 let currentStatus: GitStatus | null = null;
 let currentFilesBySection: { [key: string]: FileTreeNode } = {};
 let selectedFiles = new Set<string>();
@@ -162,7 +156,7 @@ function initialize() {
         statusDiv.textContent = 'Loading changes...';
         statusDiv.style.color = '#666';
     }
-    vscode.postMessage({ type: 'refresh' });
+    vscodeApi.postMessage({ type: 'refresh' });
 }
 
 // Call initialize when DOM is loaded
@@ -375,7 +369,7 @@ function updateView(): void {
 }
 
 function refreshChanges(): void {
-    vscode.postMessage({ type: 'refresh' });
+    vscodeApi.postMessage({ type: 'refresh' });
 }
 
 function toggleNode(nodeId: string): void {
@@ -518,7 +512,7 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
 
     sectionNode.appendChild(titleDiv);
 
-    const childrenDiv = document.createElement('div') as HTMLDivElement;
+    const childrenDiv = document.createElement('div');
     childrenDiv.className = 'section-content';
     sectionNode.appendChild(childrenDiv);
 
@@ -526,36 +520,25 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
     return { sectionNode, childrenDiv };
 }
 
-/*function toggleSection(section: Section, checked: boolean): void {
-    log(`Toggling section ${section} to ${checked}`);
-    
-    // Get all repo checkboxes for this section
-    const repoCheckboxes = document.querySelectorAll<HTMLInputElement>(
-        `input[type="checkbox"][data-section="${section}"]:not([data-dir]):not([data-file])`
-    );
-    
-    // Update each repo
-    repoCheckboxes.forEach(checkbox => {
-        const repoPath = checkbox.dataset.repo;
-        if (repoPath) {
-            toggleRepoFiles(repoPath, checked, section);
-        }
-    });
-    
-    // Update the section checkbox
-    const sectionCheckbox = document.querySelector<HTMLInputElement>(
-        `input[type="checkbox"].section-checkbox[data-section="${section}"]`
-    );
-    
-    if (sectionCheckbox) {
-        sectionCheckbox.checked = checked;
-        sectionCheckbox.indeterminate = false;
+function toggleNodeSelection(nodeId: string): void {
+    const node = document.getElementById(nodeId);
+    if (!node) return;
+
+    const isSelected = selectedFiles.has(nodeId);
+    if (isSelected) {
+        selectedFiles.delete(nodeId);
+        node.classList.remove('selected');
+    } else {
+        selectedFiles.add(nodeId);
+        node.classList.add('selected');
     }
-    
-    // Update commit button state
-    updateCommitButton();
+
+    // Notify VS Code
+    vscodeApi.postMessage({
+        type: 'selectionChanged',
+        files: Array.from(selectedFiles)
+    });
 }
-*/
 
 function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
     log(`Toggling directory ${dirPath} in repo ${repoPath} to ${checked}`);
@@ -716,11 +699,42 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
         toggleSpan.classList.toggle('codicon-chevron-down');
     });
 
-    // Create root level file nodes
-    const rootFiles = fileTree._files || [];
-    rootFiles.forEach(file => {
-        if (!file.includes('/')) {
-            childrenDiv.appendChild(createFileNode(repoPath, file, section));
+    contentDiv.addEventListener('keydown', (e) => {
+        console.log('Got keydown event', e.target);
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            childrenDiv.classList.add('expanded');
+            toggleSpan.classList.remove('codicon-chevron-right');
+            toggleSpan.classList.add('codicon-chevron-down');
+            //childrenDiv.tabIndex = 0; // Make it focusable
+            //childrenDiv.focus(); // Move focus into the children
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            childrenDiv.classList.remove('expanded');
+            toggleSpan.classList.remove('codicon-chevron-down');
+            toggleSpan.classList.add('codicon-chevron-right');
+            contentDiv.tabIndex = 0; // Remove focus
+            //contentDiv.focus(); // Move focus back to the parent
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const firstChild = contentDiv.firstElementChild as HTMLElement;
+            if (firstChild) {
+                firstChild.tabIndex = 0;
+                firstChild.focus();
+            } else {
+                const nextElement = contentDiv.nextElementSibling as HTMLElement;
+                if (nextElement) {
+                    nextElement.tabIndex = 0;
+                    nextElement.focus();
+                }
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const previousElement = contentDiv.previousElementSibling as HTMLElement;
+            if (previousElement) {
+                previousElement.tabIndex = 0;
+                previousElement.focus();
+            }
         }
     });
 
@@ -851,22 +865,11 @@ function handleCommit(): void {
 
     log('[handleCommit] Sending commit message to VS Code');
     log('[handleCommit] Selected paths', 'info', selectedPaths);
-    vscode.postMessage({
+    vscodeApi.postMessage({
         command: 'commit',
         message: commitMessage,
         files: selectedPaths
     });
-}
-
-function toggleNodeSelection(nodeId: string): void {
-    const node = document.getElementById(nodeId);
-    if (!node) return;
-
-    const checkbox = node.querySelector('input[type="checkbox"]') as HTMLInputElement;
-    if (checkbox) {
-        checkbox.checked = !checkbox.checked;
-        checkbox.dispatchEvent(new Event('change'));
-    }
 }
 
 function getNextVisibleNode(currentNode: TreeNode | null, direction: 'up' | 'down'): TreeNode | null {
@@ -945,7 +948,7 @@ function handleKeyboardNavigation(event: KeyboardEvent): void {
         case 'ArrowRight':
             if (currentNode) {
                 event.preventDefault();
-                if (currentNode.classList.contains('section')) {
+                if (currentNode.classList.contains('tree-node')) {
                     const childrenDiv = currentNode.querySelector('.section-children') as TreeNode;
                     if (childrenDiv && childrenDiv.style.display === 'none') {
                         childrenDiv.style.display = 'block';
@@ -1018,24 +1021,6 @@ function isTreeNode(element: Element | null): element is TreeNode {
     return element !== null && element.classList.contains('tree-node');
 }
 
-function addClickHandler(node: TreeNode) {
-    const contentDiv = node.querySelector('.tree-content, .section-title') as TreeNode;
-    if (contentDiv) {
-        contentDiv.addEventListener('click', (event) => {
-            const target = event.target as TreeNode;
-            if (target.tagName === 'INPUT' || target.classList.contains('tree-toggle')) {
-                return;
-            }
-
-            event.stopPropagation();
-
-            focusedNodeId = node.id;
-            node.focus();
-            node.scrollIntoView({ block: 'nearest' });
-        });
-    }
-}
-
 function selectFile(repoPath: string, file: string, section: Section): void {
     const fileKey = getFileKey(repoPath, section, file);
     selectedFiles.add(fileKey);
@@ -1096,7 +1081,7 @@ function showPushPrompt(): void {
     document.body.appendChild(pushPrompt);
 
     document.getElementById('push-yes')?.addEventListener('click', () => {
-        vscode.postMessage({ command: 'push' });
+        vscodeApi.postMessage({ command: 'push' });
         pushPrompt.remove();
     });
 
@@ -1106,26 +1091,17 @@ function showPushPrompt(): void {
 }
 
 function updateStatusMessage(message: string, type: 'success' | 'error' = 'success'): void {
-    let statusArea = document.getElementById('status-message');
-    if (!statusArea) {
-        statusArea = document.createElement('div');
-        statusArea.id = 'status-message';
-        const commitButton = document.getElementById('commit-button');
-        if (commitButton) {
-            commitButton.insertAdjacentElement('afterend', statusArea);
-        }
-    }
-    
-    statusArea.textContent = message;
-    statusArea.className = `status-message ${type}`;
-    
-    if (type === 'success') {
-        setTimeout(() => {
-            if (statusArea) {
-                statusArea.textContent = '';
-                statusArea.className = 'status-message';
-            }
-        }, 5000);
+    const statusElement = document.getElementById('status-message');
+    if (statusElement) {
+        statusElement.textContent = message;
+        statusElement.className = `status-message ${type}`;
+        
+        // Notify VS Code
+        vscodeApi.postMessage({
+            type: 'statusUpdate',
+            message,
+            messageType: type
+        });
     }
 }
 
@@ -1175,10 +1151,22 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     // Add click handler to toggle children
     contentDiv.addEventListener('click', (e) => {
         if (e.target === checkbox) return;
-        childrenDiv.classList.toggle('expanded');
-        toggleSpan.classList.toggle('codicon-chevron-right');
-        toggleSpan.classList.toggle('codicon-chevron-down');
+        childrenDiv.classList.add('expanded');
+        toggleSpan.classList.remove('codicon-chevron-right');
+        toggleSpan.classList.add('codicon-chevron-down');
     });
+
+    contentDiv.addEventListener('keydown', (e) => {
+        if (e.target === checkbox) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            childrenDiv.classList.add('expanded');
+            toggleSpan.classList.remove('codicon-chevron-right');
+            toggleSpan.classList.add('codicon-chevron-down');
+        }
+    });
+
+    contentDiv.tabIndex = 0; // Make it focusable
 
     // Create file nodes for files in this directory
     const filesInDir = fileTree._files || [];

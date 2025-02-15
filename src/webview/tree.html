@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git File Tree</title>
+    <style>
+        :root {
+            --container-padding: 20px;
+            --input-padding-vertical: 6px;
+            --input-padding-horizontal: 4px;
+            --input-margin-vertical: 4px;
+            --input-margin-horizontal: 0;
+        }
+
+        body {
+            padding: 0;
+            margin: 0;
+            color: var(--vscode-foreground);
+            font-size: var(--vscode-font-size);
+            font-weight: var(--vscode-font-weight);
+            font-family: var(--vscode-font-family);
+            background-color: green;
+        }
+
+        .tree-container {
+            padding: var(--container-padding);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: bold;
+            padding: 4px 8px;
+            background-color: var(--vscode-sideBarSectionHeader-background);
+            color: var(--vscode-sideBarSectionHeader-foreground);
+        }
+
+        .tree-item {
+            display: flex;
+            flex-direction: column;
+            padding: 2px 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            position: relative;
+            margin-left: 12px;
+        }
+
+        .tree-item:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .tree-item:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            background-color: var(--vscode-list-activeSelectionBackground);
+            color: var(--vscode-list-activeSelectionForeground);
+        }
+
+        .tree-item:focus vscode-checkbox {
+            --checkbox-background: var(--vscode-list-activeSelectionBackground);
+            --checkbox-foreground: var(--vscode-list-activeSelectionForeground);
+        }
+
+        .tree-children {
+            margin-left: 12px;
+            position: relative;
+            border-left: 1px solid var(--vscode-tree-indentGuidesStroke);
+            margin-bottom: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .tree-children.hidden {
+            display: none;
+        }
+
+        .tree-item span {
+            margin-left: 8px;
+            user-select: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-item[data-type="directory"] > span::before {
+            content: "📁";
+            margin-right: 4px;
+        }
+
+        .tree-item[data-type="file"] > span::before {
+            content: "📄";
+            margin-right: 4px;
+        }
+
+        .tree-item[data-type="repo"] > span::before {
+            content: "📦";
+            margin-right: 4px;
+        }
+
+        vscode-checkbox {
+            --checkbox-border: var(--vscode-checkbox-border);
+            --checkbox-background: var(--vscode-checkbox-background);
+            --checkbox-foreground: var(--vscode-checkbox-foreground);
+            min-width: 16px;
+            margin-left: 4px;
+        }
+
+        .tree-item-content {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            min-width: 0; /* Enable text truncation */
+        }
+
+        .expand-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            line-height: 16px;
+            text-align: center;
+            transition: transform 0.15s ease;
+            color: var(--vscode-foreground);
+            opacity: 0.7;
+            cursor: pointer;
+            user-select: none;
+            font-size: 10px;
+        }
+
+        .expand-icon.expanded {
+            transform: rotate(90deg);
+        }
+
+        .tree-label {
+            margin-left: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-item[data-type="directory"] > .tree-item-content > .tree-label::before,
+        .tree-item[data-type="repo"] > .tree-item-content > .tree-label::before {
+            content: "📁";
+            margin-right: 4px;
+        }
+
+        .tree-item[data-type="file"] > .tree-item-content > .tree-label::before {
+            content: "📄";
+            margin-right: 4px;
+        }
+
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 4px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .status-message.success {
+            background-color: var(--vscode-terminal-ansiGreen);
+            color: var(--vscode-editor-background);
+        }
+
+        .status-message.error {
+            background-color: var(--vscode-terminal-ansiRed);
+            color: var(--vscode-editor-background);
+        }
+
+        .push-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .push-prompt-content {
+            background-color: var(--vscode-editor-background);
+            padding: 20px;
+            border-radius: 4px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.33);
+        }
+
+        .push-prompt-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .push-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+
+        .push-button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+
+        #tracking-section, #unversioned-section {
+            margin-bottom: 20px;
+        }
+
+        /* Vertical tree lines */
+        .tree-item::before {
+            content: "";
+            position: absolute;
+            left: -12px;
+            top: 50%;
+            width: 12px;
+            height: 1px;
+            background-color: var(--vscode-tree-indentGuidesStroke);
+        }
+
+        .tree-item:last-child::before {
+            height: 1px;
+        }
+
+        .tree-children::before {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="tree-container">
+        <div id="tracking-section">
+            <div class="section-header">
+                <vscode-checkbox class="section-checkbox" data-section="tracking">Tracking</vscode-checkbox>
+            </div>
+            <div id="tracking-tree"></div>
+        </div>
+        <div id="unversioned-section">
+            <div class="section-header">
+                <vscode-checkbox class="section-checkbox" data-section="unversioned">Unversioned</vscode-checkbox>
+            </div>
+            <div id="unversioned-tree"></div>
+        </div>
+    </div>
+    <div id="status-message" class="status-message"></div>
+    <script>
+        // Mock data for development
+        
+            window.mockGitStatus = {
+            repositories: {
+                '/Users/hitech/github/iAllAuto': {
+                    versioned: [
+                        'src/webview/script.ts',
+                        'src/extension.ts',
+                        'package.json',
+                        'src/webview/styles.css'
+                    ],
+                    unversioned: [
+                        '.vscode/launch.json',
+                        'webpack.config.js',
+                        'docs/notes.md'
+                    ]
+                },
+                '/Users/hitech/github/test-repo': {
+                    versioned: [
+                        'src/main.js',
+                        'src/app/x1/main.js',
+                        'src/app/x1/x11/main2.js',
+                        'lib/utils/helper.js',
+                        'tests/main.test.js'
+                    ],
+                    unversioned: [
+                        'temp/debug.log',
+                        'docs/draft.md',
+                        'src/app/x1/mainu.js',
+                        'src/app/x1/main3.js',
+                        'src/app/x1/x11/mainu.js',
+                    ]
+                }
+            }
+        };
+
+        // Simulate VS Code message in development
+        if (typeof acquireVsCodeApi !== 'function') {
+            setTimeout(() => {
+                window.postMessage({ 
+                    type: 'updateStatus', 
+                    status: window.mockGitStatus 
+                }, '*');
+            }, 100);
+        }
+    </script>
+    <script type="module" src="tree.js"></script>
+</body>
+</html>
