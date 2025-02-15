@@ -14,7 +14,7 @@ interface FileTreeNode {
     [key: string]: FileTreeNode | string[];
 }
 
-type Section = 'tracking' | 'unversioned';
+type Section = 'tracking' | 'unversioned' | 'staged';
 
 interface FileTreesBySection {
     [repoPath: string]: {
@@ -580,61 +580,117 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
     return { sectionNode, childrenDiv };
 }
 
-function updateSectionCheckboxStates(): void {
-    (['tracking', 'unversioned'] as Section[]).forEach(sectionId => {
-        const section = document.getElementById(sectionId);
-        const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
-        if (!section || !sectionCheckbox) return;
-
-        const fileCheckboxes = section.querySelectorAll('input[type="checkbox"][data-repo]') as NodeListOf<HTMLInputElement>;
-        
-        if (fileCheckboxes.length === 0) {
-            sectionCheckbox.checked = false;
-            sectionCheckbox.indeterminate = false;
-            return;
+/*function toggleSection(section: Section, checked: boolean): void {
+    log(`Toggling section ${section} to ${checked}`);
+    
+    // Get all repo checkboxes for this section
+    const repoCheckboxes = document.querySelectorAll<HTMLInputElement>(
+        `input[type="checkbox"][data-section="${section}"]:not([data-dir]):not([data-file])`
+    );
+    
+    // Update each repo
+    repoCheckboxes.forEach(checkbox => {
+        const repoPath = checkbox.dataset.repo;
+        if (repoPath) {
+            toggleRepoFiles(repoPath, checked, section);
         }
-
-        let allChecked = true;
-        let allUnchecked = true;
-
-        fileCheckboxes.forEach(checkbox => {
-            const repoPath = checkbox.dataset.repo;
-            
-            if (repoPath) {
-                const fileTree = currentFilesBySection[getRepoKey(repoPath, sectionId)];
-                if (fileTree) {
-                    const allFiles = getAllFilesUnderTree(fileTree);
-                    const allSelected = allFiles.every(file => selectedFiles.has(getFileKey(repoPath, sectionId, file)));
-                    const someSelected = allFiles.some(file => selectedFiles.has(getFileKey(repoPath, sectionId, file)));
-
-                    if (!allSelected) allChecked = false;
-                    if (someSelected) allUnchecked = false;
-                }
-            }
-        });
-
-        sectionCheckbox.checked = allChecked;
-        sectionCheckbox.indeterminate = !allChecked && !allUnchecked;
     });
+    
+    // Update the section checkbox
+    const sectionCheckbox = document.querySelector<HTMLInputElement>(
+        `input[type="checkbox"].section-checkbox[data-section="${section}"]`
+    );
+    
+    if (sectionCheckbox) {
+        sectionCheckbox.checked = checked;
+        sectionCheckbox.indeterminate = false;
+    }
+    
+    // Update commit button state
+    updateCommitButton();
 }
+*/
 
-function toggleAllFiles(repoPath: string, section: Section): void {
-    const repoKey = getRepoKey(repoPath, section);
-    const fileTree = currentFilesBySection[repoKey];
-    if (!fileTree) return;
-
-    const allFiles = getAllFilesUnderTree(fileTree);
-    const allSelected = allFiles.every(file => selectedFiles.has(getFileKey(repoPath, section, file)));
-
-    allFiles.forEach(file => {
-        if (allSelected) {
-            selectedFiles.delete(getFileKey(repoPath, section, file));
-        } else {
-            selectedFiles.add(getFileKey(repoPath, section, file));
+function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
+    log(`Toggling directory ${dirPath} in repo ${repoPath} to ${checked}`);
+    
+    // Get all checkboxes under this directory
+    const dirSelector = `[data-repo="${repoPath}"][data-section="${section}"]`;
+    const allCheckboxes = document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]${dirSelector}`);
+    
+    // First update all immediate children
+    allCheckboxes.forEach(checkbox => {
+        const checkboxDir = checkbox.dataset.dir;
+        const checkboxFile = checkbox.dataset.file;
+        
+        if (checkboxDir === dirPath) {
+            // This is the directory checkbox itself
+            checkbox.checked = checked;
+            checkbox.indeterminate = false;
+        } else if (checkboxFile && checkboxFile.startsWith(dirPath + '/') && 
+                  !checkboxFile.slice(dirPath.length + 1).includes('/')) {
+            // This is an immediate file child
+            checkbox.checked = checked;
+            if (checked) {
+                selectFile(repoPath, checkboxFile, section);
+            } else {
+                unselectFile(repoPath, checkboxFile, section);
+            }
+        } else if (checkboxDir && checkboxDir.startsWith(dirPath + '/') && 
+                  !checkboxDir.slice(dirPath.length + 1).includes('/')) {
+            // This is an immediate directory child
+            checkbox.checked = checked;
+            checkbox.indeterminate = false;
+            // Recursively update this directory's children
+            toggleDirectoryFiles(repoPath, checkboxDir, checked, section);
         }
     });
-
-    updateView();
+    
+    // Update parent directory states
+    let parentPath = dirPath.split('/').slice(0, -1).join('/');
+    while (parentPath) {
+        const parentCheckbox = document.querySelector<HTMLInputElement>(
+            `input[type="checkbox"][data-repo="${repoPath}"][data-dir="${parentPath}"][data-section="${section}"]`
+        );
+        
+        if (parentCheckbox) {
+            // Get all immediate children of this parent
+            const immediateChildren = Array.from(allCheckboxes).filter(checkbox => {
+                const childDir = checkbox.dataset.dir;
+                const childFile = checkbox.dataset.file;
+                const path = childDir || childFile;
+                
+                if (!path) return false;
+                
+                // Check if it's an immediate child
+                const relativePath = path.slice(parentPath.length + 1);
+                return path.startsWith(parentPath + '/') && !relativePath.includes('/');
+            });
+            
+            // Check children states
+            const allChecked = immediateChildren.every(c => c.checked);
+            const allUnchecked = immediateChildren.every(c => !c.checked && !c.indeterminate);
+            
+            if (allChecked) {
+                parentCheckbox.checked = true;
+                parentCheckbox.indeterminate = false;
+            } else if (allUnchecked) {
+                parentCheckbox.checked = false;
+                parentCheckbox.indeterminate = false;
+            } else {
+                parentCheckbox.checked = false;
+                parentCheckbox.indeterminate = true;
+            }
+        }
+        
+        parentPath = parentPath.split('/').slice(0, -1).join('/');
+    }
+    
+    // Update section checkbox state
+    updateSectionCheckboxStates();
+    
+    // Update commit button state
+    updateCommitButton();
 }
 
 function createFileTree(files: string[]): FileTreeNode {
@@ -688,7 +744,7 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
     checkbox.className = 'tree-checkbox';
     checkbox.dataset.repo = repoPath;
     checkbox.dataset.section = section;
-    checkbox.addEventListener('change', () => toggleAllFiles(repoPath, section));
+    checkbox.addEventListener('change', () => toggleRepoFiles(repoPath, checkbox.checked, section));
     contentDiv.appendChild(checkbox);
 
     const iconSpan = document.createElement('span');
@@ -734,91 +790,23 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
     return repoNode;
 }
 
-function toggleAllInSection(sectionId: Section): void {
-    log(`Toggling all files in section: ${sectionId}`);
-    const checkbox = document.querySelector(`#toggle-${sectionId}`)?.nextElementSibling as HTMLInputElement;
-    if (!checkbox || !currentStatus) return;
+function toggleAllFiles(repoPath: string, section: Section): void {
+    const repoKey = getRepoKey(repoPath, section);
+    const fileTree = currentFilesBySection[repoKey];
+    if (!fileTree) return;
 
-    const isChecked = checkbox.checked;
-    log(`Section checkbox state: ${isChecked}`);
+    const allFiles = getAllFilesUnderTree(fileTree);
+    const allSelected = allFiles.every(file => selectedFiles.has(getFileKey(repoPath, section, file)));
 
-    checkbox.indeterminate = false;
-
-    const repos = Object.entries(currentStatus.repositories);
-    log(`Found ${repos.length} repositories`);
-
-    repos.forEach(([repoPath]) => {
-        const repoKey = getRepoKey(repoPath, sectionId);
-        const fileTree = currentFilesBySection[repoKey];
-        if (fileTree) {
-            const allFiles = getAllFilesUnderTree(fileTree);
-            allFiles.forEach(file => {
-                const fileKey = getFileKey(repoPath, sectionId, file);
-                if (isChecked) {
-                    selectedFiles.add(fileKey);
-                } else {
-                    selectedFiles.delete(fileKey);
-                }
-            });
+    allFiles.forEach(file => {
+        if (allSelected) {
+            selectedFiles.delete(getFileKey(repoPath, section, file));
+        } else {
+            selectedFiles.add(getFileKey(repoPath, section, file));
         }
     });
 
     updateView();
-    updateCommitButton();
-}
-
-function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
-    log(`Toggling directory ${dirPath} in repo ${repoPath} to ${checked}`);
-    
-    // Get all checkboxes under this directory
-    const dirSelector = `[data-repo="${repoPath}"][data-section="${section}"]`;
-    const allCheckboxes = document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]${dirSelector}`);
-    
-    allCheckboxes.forEach(checkbox => {
-        const checkboxDir = checkbox.dataset.dir;
-        const checkboxFile = checkbox.dataset.file;
-        
-        // Check if this checkbox is under our directory
-        if ((checkboxDir && checkboxDir.startsWith(dirPath)) || 
-            (checkboxFile && checkboxFile.startsWith(dirPath + '/'))) {
-            checkbox.checked = checked;
-            if (checkboxFile) {
-                // This is a file checkbox
-                if (checked) {
-                    selectFile(repoPath, checkboxFile, section);
-                } else {
-                    unselectFile(repoPath, checkboxFile, section);
-                }
-            }
-        }
-    });
-
-    // Update child directory checkboxes
-    updateChildDirectoryCheckboxes(repoPath, dirPath, checked, section);
-    
-    // Update parent directory checkboxes
-    updateParentDirectoryCheckboxes(repoPath, dirPath, section);
-    
-    // Update section checkbox state
-    updateSectionCheckboxStates();
-    
-    // Update commit button state
-    updateCommitButton();
-}
-
-function updateChildDirectoryCheckboxes(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
-    // Get all checkboxes under this directory
-    const childCheckboxes = document.querySelectorAll<HTMLInputElement>(
-        `input[type="checkbox"][data-repo="${repoPath}"][data-section="${section}"]`
-    );
-    
-    childCheckboxes.forEach(checkbox => {
-        const checkboxDir = checkbox.dataset.dir;
-        if (checkboxDir && checkboxDir.startsWith(dirPath + '/')) {
-            checkbox.checked = checked;
-            checkbox.indeterminate = false;
-        }
-    });
 }
 
 function getAllFilesUnderTree(tree: FileTreeNode | string[]): string[] {
@@ -1306,4 +1294,90 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
 
     fileNode.appendChild(contentDiv);
     return fileNode;
+}
+
+function toggleRepoFiles(repoPath: string, checked: boolean, section: Section): void {
+    log(`Toggling repo ${repoPath} to ${checked}`);
+    
+    // Get all checkboxes for this repo and section
+    const repoSelector = `[data-repo="${repoPath}"][data-section="${section}"]`;
+    const allCheckboxes = document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]${repoSelector}`);
+    
+    // First update all top-level items
+    allCheckboxes.forEach(checkbox => {
+        const checkboxDir = checkbox.dataset.dir;
+        const checkboxFile = checkbox.dataset.file;
+        
+        // Skip the repo checkbox itself
+        if (!checkboxDir && !checkboxFile) return;
+        
+        // If it's a top-level item (no slashes in path)
+        if ((checkboxDir && !checkboxDir.includes('/')) || 
+            (checkboxFile && !checkboxFile.includes('/'))) {
+            checkbox.checked = checked;
+            checkbox.indeterminate = false;
+            
+            if (checkboxDir) {
+                // Recursively update directory children
+                toggleDirectoryFiles(repoPath, checkboxDir, checked, section);
+            } else if (checkboxFile) {
+                // Update file selection
+                if (checked) {
+                    selectFile(repoPath, checkboxFile, section);
+                } else {
+                    unselectFile(repoPath, checkboxFile, section);
+                }
+            }
+        }
+    });
+    
+    // Update the repo checkbox state
+    const repoCheckbox = document.querySelector<HTMLInputElement>(
+        `input[type="checkbox"]${repoSelector}:not([data-dir]):not([data-file])`
+    );
+    
+    if (repoCheckbox) {
+        repoCheckbox.checked = checked;
+        repoCheckbox.indeterminate = false;
+    }
+    
+    // Update section checkbox state
+    updateSectionCheckboxStates();
+
+//    updateRepoCheckbox(repoPath, section);
+    
+    // Update commit button state
+    updateCommitButton();
+}
+
+function updateSectionCheckboxStates(): void {
+    const sections: Section[] = ['tracking', 'unversioned'];
+    
+    sections.forEach(section => {
+        const sectionCheckbox = document.querySelector<HTMLInputElement>(
+            `input[type="checkbox"].section-checkbox[data-section="${section}"]`
+        );
+        
+        if (sectionCheckbox) {
+            const repoCheckboxes = document.querySelectorAll<HTMLInputElement>(
+                `input[type="checkbox"][data-section="${section}"]:not([data-dir]):not([data-file])`
+            );
+            
+            if (repoCheckboxes.length > 0) {
+                const allChecked = Array.from(repoCheckboxes).every(cb => cb.checked);
+                const allUnchecked = Array.from(repoCheckboxes).every(cb => !cb.checked && !cb.indeterminate);
+                
+                if (allChecked) {
+                    sectionCheckbox.checked = true;
+                    sectionCheckbox.indeterminate = false;
+                } else if (allUnchecked) {
+                    sectionCheckbox.checked = false;
+                    sectionCheckbox.indeterminate = false;
+                } else {
+                    sectionCheckbox.checked = false;
+                    sectionCheckbox.indeterminate = true;
+                }
+            }
+        }
+    });
 }
