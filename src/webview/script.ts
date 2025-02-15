@@ -1202,6 +1202,9 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     checkbox.addEventListener('change', () => {
         toggleDirectoryFiles(repoPath, dirPath, checkbox.checked, section);
         updateParentDirectoryCheckboxes(repoPath, dirPath, section);
+        updateRepoCheckbox(repoPath, section);
+        //updateSectionCheckboxStates();
+        updateCommitButton();
     });
     contentDiv.appendChild(checkbox);
 
@@ -1279,6 +1282,7 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
             updateParentDirectoryCheckboxes(repoPath, parentDir, section);
         }
         updateSectionCheckboxStates();
+        updateRepoCheckbox(repoPath, section);
         updateCommitButton();
     });
     contentDiv.appendChild(checkbox);
