@@ -409,33 +409,6 @@ function getRepoKey(repoPath: string, section: Section): RepoKey {
     return `${repoPath}:${section}`;
 }
 
-function toggleFile(repoPath: string, file: string, section: Section): void {
-    log(`[toggleFile] Toggling file: ${file} in repo: ${repoPath}, section: ${section}`);
-    
-    const sectionDiv = document.querySelector(`.${section}-section`);
-    if (!sectionDiv) return;
-
-    const checkbox = sectionDiv.querySelector(`input[type="checkbox"][data-repo="${repoPath}"][data-file="${file}"][data-section="${section}"]`) as HTMLInputElement;
-    if (!checkbox) return;
-
-    const isChecked = checkbox.checked;
-    const repoKey = getRepoKey(repoPath, section);
-    const repoFiles = selectedFiles.has(repoKey);
-
-    if (isChecked) {
-        selectedFiles.add(repoKey);
-    } else {
-        selectedFiles.delete(repoKey);
-    }
-
-    const dirPath = file.split('/').slice(0, -1).join('/');
-    if (dirPath) {
-        updateParentDirectoryCheckboxes(repoPath, dirPath, section);
-    }
-
-    updateCommitButton();
-}
-
 function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section): void {
     // Get all checkboxes for this repo and section
     const allCheckboxes = Array.from(document.querySelectorAll<HTMLInputElement>(
