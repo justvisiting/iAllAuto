@@ -14,6 +14,13 @@ interface FileTreeNode {
     [key: string]: FileTreeNode | string[];
 }
 
+const enum DirectionTypes {
+    Up = 'up',
+    Down = 'down'
+}
+
+type Direction = DirectionTypes;
+
 type Section = 'tracking' | 'unversioned' | 'staged';
 
 interface FileTreesBySection {
@@ -468,8 +475,7 @@ function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, sect
         }
     }
     
-    // Update section checkbox state
-    updateSectionCheckboxStates();
+    updateRepoCheckbox(repoPath, section, DirectionTypes.Up);
 }
 
 function updateSectionCheckboxState(sectionId: Section): void {
@@ -687,7 +693,7 @@ function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolea
     }
     
     // Update section checkbox state
-    updateSectionCheckboxStates();
+    //updateSectionCheckboxStates();
     
     // Update commit button state
     updateCommitButton();
@@ -744,7 +750,7 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
     checkbox.className = 'tree-checkbox';
     checkbox.dataset.repo = repoPath;
     checkbox.dataset.section = section;
-    checkbox.addEventListener('change', () => toggleRepoFiles(repoPath, checkbox.checked, section));
+    checkbox.addEventListener('change', () => handleRepoCheckboxToggle(repoPath, checkbox.checked, section));
     contentDiv.appendChild(checkbox);
 
     const iconSpan = document.createElement('span');
@@ -1105,7 +1111,7 @@ function isFileSelected(repoPath: string, file: string, section: Section): boole
     return selectedFiles.has(fileKey);
 }
 
-function updateRepoCheckbox(repoPath: string, section: Section): void {
+function updateRepoCheckbox(repoPath: string, section: Section, direction: Direction = DirectionTypes.Up): void {
     log(`[updateRepoCheckbox] Updating repo checkbox for ${repoPath}, section: ${section}`);
     
     const sectionDiv = document.querySelector(`.${section}-section`);
@@ -1129,6 +1135,10 @@ function updateRepoCheckbox(repoPath: string, section: Section): void {
     log(`[updateRepoCheckbox] Files status - all: ${allSelected}, some: ${someSelected}`);
     checkbox.checked = allSelected;
     checkbox.indeterminate = !allSelected && someSelected;
+
+    if (direction === DirectionTypes.Up) {
+        updateSectionCheckboxState(section);
+    }
 }
 
 function showPushPrompt(): void {
@@ -1202,8 +1212,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     checkbox.addEventListener('change', () => {
         toggleDirectoryFiles(repoPath, dirPath, checkbox.checked, section);
         updateParentDirectoryCheckboxes(repoPath, dirPath, section);
-        updateRepoCheckbox(repoPath, section);
-        //updateSectionCheckboxStates();
+        //updateRepoCheckbox(repoPath, section);
         updateCommitButton();
     });
     contentDiv.appendChild(checkbox);
@@ -1280,9 +1289,9 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
         const parentDir = file.split('/').slice(0, -1).join('/');
         if (parentDir) {
             updateParentDirectoryCheckboxes(repoPath, parentDir, section);
+        } else {
+            updateRepoCheckbox(repoPath, section, DirectionTypes.Up);
         }
-        updateSectionCheckboxStates();
-        updateRepoCheckbox(repoPath, section);
         updateCommitButton();
     });
     contentDiv.appendChild(checkbox);
@@ -1300,12 +1309,35 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     return fileNode;
 }
 
-function toggleRepoFiles(repoPath: string, checked: boolean, section: Section): void {
+function handleRepoCheckboxToggle(repoPath: string, checked: boolean, section: Section): void {
+    toggleNodesUnderRepo(repoPath, checked, section);
+    //updateRepoCheckbox(repoPath, section, DirectionTypes.Down);
+    updateSectionCheckboxStates();
+    /*// Update the repo checkbox state
+    const repoCheckbox = document.querySelector<HTMLInputElement>(
+        `input[type="checkbox"]${repoSelector}:not([data-dir]):not([data-file])`
+    );
+    
+    if (repoCheckbox) {
+        repoCheckbox.checked = checked;
+        repoCheckbox.indeterminate = false;
+    }
+    
+    // Update section checkbox state
+    updateSectionCheckboxStates();
+
+//    updateRepoCheckbox(repoPath, section);
+    */
+    // Update commit button state
+    updateCommitButton();
+}
+
+function toggleNodesUnderRepo(repoPath: string, checked: boolean, section: Section): void {
     log(`Toggling repo ${repoPath} to ${checked}`);
     
     // Get all checkboxes for this repo and section
     const repoSelector = `[data-repo="${repoPath}"][data-section="${section}"]`;
-    const allCheckboxes = document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]${repoSelector}`);
+    const allCheckboxes = document.querySelectorAll<HTMLInputElement>(`.repo-node[data-repo="${repoPath}"] input[type="checkbox"][data-section="${section}"]`);
     
     // First update all top-level items
     allCheckboxes.forEach(checkbox => {
@@ -1335,53 +1367,60 @@ function toggleRepoFiles(repoPath: string, checked: boolean, section: Section): 
         }
     });
     
-    // Update the repo checkbox state
-    const repoCheckbox = document.querySelector<HTMLInputElement>(
-        `input[type="checkbox"]${repoSelector}:not([data-dir]):not([data-file])`
-    );
     
-    if (repoCheckbox) {
-        repoCheckbox.checked = checked;
-        repoCheckbox.indeterminate = false;
-    }
-    
-    // Update section checkbox state
-    updateSectionCheckboxStates();
-
-//    updateRepoCheckbox(repoPath, section);
-    
-    // Update commit button state
-    updateCommitButton();
 }
 
 function updateSectionCheckboxStates(): void {
     const sections: Section[] = ['tracking', 'unversioned'];
+    log('Updating section checkbox states', 'info', sections);
     
     sections.forEach(section => {
+        log(`Checking section: ${section}`);
+        
         const sectionCheckbox = document.querySelector<HTMLInputElement>(
             `input[type="checkbox"].section-checkbox[data-section="${section}"]`
         );
         
         if (sectionCheckbox) {
+            log(`Found section checkbox for ${section}`);
             const repoCheckboxes = document.querySelectorAll<HTMLInputElement>(
-                `input[type="checkbox"][data-section="${section}"]:not([data-dir]):not([data-file])`
+                `.repo-node > .tree-content > input[type="checkbox"][data-section="${section}"]`
             );
             
+            log(`Found ${repoCheckboxes.length} repo checkboxes for section ${section}`);
+            
             if (repoCheckboxes.length > 0) {
+                const repoStates = Array.from(repoCheckboxes).map(cb => ({
+                    checked: cb.checked,
+                    indeterminate: cb.indeterminate
+                }));
+                log(`Repo checkbox states for ${section}:`, 'info', repoStates);
+                
                 const allChecked = Array.from(repoCheckboxes).every(cb => cb.checked);
                 const allUnchecked = Array.from(repoCheckboxes).every(cb => !cb.checked && !cb.indeterminate);
                 
+                log(`Section ${section} states - allChecked: ${allChecked}, allUnchecked: ${allUnchecked}`);
+                
                 if (allChecked) {
+                    log(`Setting ${section} to checked`);
                     sectionCheckbox.checked = true;
                     sectionCheckbox.indeterminate = false;
                 } else if (allUnchecked) {
+                    log(`Setting ${section} to unchecked`);
                     sectionCheckbox.checked = false;
                     sectionCheckbox.indeterminate = false;
                 } else {
+                    log(`Setting ${section} to indeterminate`);
                     sectionCheckbox.checked = false;
                     sectionCheckbox.indeterminate = true;
                 }
+            } else {
+                log(`No repo checkboxes found for section ${section}, setting to unchecked`);
+                sectionCheckbox.checked = false;
+                sectionCheckbox.indeterminate = false;
             }
+        } else {
+            log(`No section checkbox found for ${section}`, 'error');
         }
     });
 }
