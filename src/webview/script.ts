@@ -409,7 +409,7 @@ function getRepoKey(repoPath: string, section: Section): RepoKey {
     return `${repoPath}:${section}`;
 }
 
-function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section): void {
+function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section, direction : DirectionTypes = DirectionTypes.Down): void {
     // Get all checkboxes for this repo and section
     const allCheckboxes = Array.from(document.querySelectorAll<HTMLInputElement>(
         `input[type="checkbox"][data-repo="${repoPath}"][data-section="${section}"]`
@@ -448,43 +448,10 @@ function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, sect
         }
     }
     
-    updateRepoCheckbox(repoPath, section, DirectionTypes.Up);
-}
-
-function updateSectionCheckboxState(sectionId: Section): void {
-    log(`[updateSectionCheckboxState] Updating section: ${sectionId}`);
-    const section = document.getElementById(sectionId);
-    const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
-    if (!section || !sectionCheckbox) {
-        log('[updateSectionCheckboxState] Section or checkbox not found');
-        return;
+    if (direction === DirectionTypes.Up) {
+        updateRepoCheckbox(repoPath, section, DirectionTypes.Up);
     }
-
-    let allChecked = true;
-    let allUnchecked = true;
-
-    for (const [repoPath, sections] of Object.entries(currentFilesBySection)) {
-        const fileTree = sections[sectionId];
-        if (!fileTree) continue;
-
-        const allFiles = getAllFilesUnderTree(fileTree);
-        log(`[updateSectionCheckboxState] Files in repo ${repoPath}`, 'info', allFiles);
-
-        for (const file of allFiles) {
-            const isSelected = selectedFiles.has(getFileKey(repoPath, sectionId, file));
-            if (isSelected) {
-                allUnchecked = false;
-            } else {
-                allChecked = false;
-            }
-            if (!allChecked && !allUnchecked) break;
-        }
-        if (!allChecked && !allUnchecked) break;
-    }
-
-    log(`[updateSectionCheckboxState] allChecked: ${allChecked}, allUnchecked: ${allUnchecked}`);
-    sectionCheckbox.checked = allChecked;
-    sectionCheckbox.indeterminate = !allChecked && !allUnchecked;
+    //updateRepoCheckbox(repoPath, section, DirectionTypes.Up);
 }
 
 function toggleSection(sectionId: Section, isChecked: boolean): void {
@@ -1110,7 +1077,7 @@ function updateRepoCheckbox(repoPath: string, section: Section, direction: Direc
     checkbox.indeterminate = !allSelected && someSelected;
 
     if (direction === DirectionTypes.Up) {
-        updateSectionCheckboxState(section);
+        updateSectionCheckboxStates();
     }
 }
 
@@ -1184,7 +1151,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     checkbox.dataset.section = section;
     checkbox.addEventListener('change', () => {
         toggleDirectoryFiles(repoPath, dirPath, checkbox.checked, section);
-        updateParentDirectoryCheckboxes(repoPath, dirPath, section);
+        updateParentDirectoryCheckboxes(repoPath, dirPath, section, DirectionTypes.Up);
         //updateRepoCheckbox(repoPath, section);
         updateCommitButton();
     });
@@ -1261,7 +1228,7 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
         }
         const parentDir = file.split('/').slice(0, -1).join('/');
         if (parentDir) {
-            updateParentDirectoryCheckboxes(repoPath, parentDir, section);
+            updateParentDirectoryCheckboxes(repoPath, parentDir, section, DirectionTypes.Up);
         } else {
             updateRepoCheckbox(repoPath, section, DirectionTypes.Up);
         }
