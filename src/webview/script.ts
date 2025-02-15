@@ -82,52 +82,66 @@ let expandedNodes = new Set<string>();
 let focusedNodeId: string | null = null;
 let isTreeView: boolean = true;
 
+// Debug environment flag
+const isDebugEnv = window.location.hostname === 'localhost';
+
 function log(message: string, type: 'info' | 'error' | 'success' = 'info', ...args: any[]): void {
+    // Ignore messages containing 'hello'
+    if (message.toLowerCase().includes('hello')) {
+        return;
+    }
+
     // Format message with additional args
     const fullMessage = args?.length > 0 ? `${message} ${args?.map(arg => 
         typeof arg === 'object' ? JSON.stringify(arg) : arg
     ).join(' ')}` : message;
     
-    // Always log to console
+    // Log to console
     console.log(`[${type?.toUpperCase()}] ${fullMessage}`);
     
-    // Show as notification
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.style.position = 'fixed';
-    notification.style.bottom = '20px';
-    notification.style.right = '20px';
-    notification.style.padding = '10px 20px';
-    notification.style.borderRadius = '4px';
-    notification.style.color = 'var(--vscode-notifications-foreground)';
-    notification.style.backgroundColor = type === 'error' 
-        ? 'var(--vscode-notificationsErrorIcon-foreground)' 
-        : type === 'success'
-            ? 'var(--vscode-notificationsSuccessIcon-foreground)'
-            : 'var(--vscode-notificationsInfoIcon-foreground)';
-    notification.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-    notification.style.zIndex = '1000';
-    notification.style.opacity = '0';
-    notification.style.transition = 'opacity 0.3s ease-in-out';
-    
-    const messageSpan = document.createElement('span');
-    messageSpan.textContent = fullMessage;
-    notification.appendChild(messageSpan);
-    
-    document.body.appendChild(notification);
-    
-    // Fade in
-    setTimeout(() => {
-        notification.style.opacity = '1';
-    }, 100);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-            document.body.removeChild(notification);
-        }, 300);
-    }, 3000);
+    // Show debug message block if in debug environment
+    if (isDebugEnv) {
+        const debugContainer = document.getElementById('debug-messages') || (() => {
+            const container = document.createElement('div');
+            container.id = 'debug-messages';
+            container.style.cssText = `
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                max-width: 50%;
+                max-height: 200px;
+                overflow-y: auto;
+                background: rgba(0, 0, 0, 0.8);
+                color: #fff;
+                font-family: monospace;
+                font-size: 12px;
+                padding: 10px;
+                z-index: 9999;
+                border-top-left-radius: 4px;
+            `;
+            document.body.appendChild(container);
+            return container;
+        })();
+
+        const messageDiv = document.createElement('div');
+        messageDiv.style.cssText = `
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-left: 3px solid ${type === 'error' ? '#ff4444' : type === 'success' ? '#44ff44' : '#4444ff'};
+            word-wrap: break-word;
+        `;
+        messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ${fullMessage}`;
+        
+        debugContainer.appendChild(messageDiv);
+        
+        // Keep only last 50 messages
+        while (debugContainer.children.length > 50) {
+            debugContainer.removeChild(debugContainer.firstChild!);
+        }
+
+        // Auto-scroll to bottom
+        debugContainer.scrollTop = debugContainer.scrollHeight;
+    }
 }
 
 console.log('Script loaded, initializing...');
@@ -213,7 +227,8 @@ window.addEventListener('message', event => {
                 break;
                 
             default:
-                log('Unknown message type/command: ' + (message.type || message.command), 'error');
+                break;
+                //log('Unknown message type/command: ' + (message.type || message.command), 'error');
         }
     } catch (error) {
         log('Error handling message: ' + error, 'error');
@@ -415,38 +430,40 @@ function toggleFile(repoPath: string, file: string, section: Section): void {
 }
 
 function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, section: Section): void {
-    const parts = dirPath.split('/');
-    let currentPath = '';
+    // Get all checkboxes for this repo and section
+    const allCheckboxes = Array.from(document.querySelectorAll<HTMLInputElement>(
+        `input[type="checkbox"][data-repo="${repoPath}"][data-section="${section}"]`
+    ));
+
+    // Get all file checkboxes
+    const fileCheckboxes = allCheckboxes.filter(cb => cb.dataset.file);
     
-    // Go through each parent directory
-    for (let i = 0; i < parts.length - 1; i++) {
-        currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
-        
-        const parentCheckbox = document.querySelector<HTMLInputElement>(
+    // For each directory level in the path, update its checkbox state
+    const pathParts = dirPath.split('/');
+    for (let i = 1; i <= pathParts.length; i++) {
+        const currentPath = pathParts.slice(0, i).join('/');
+        if (!currentPath) continue;
+
+        const dirCheckbox = document.querySelector<HTMLInputElement>(
             `input[type="checkbox"][data-repo="${repoPath}"][data-dir="${currentPath}"][data-section="${section}"]`
         );
         
-        if (parentCheckbox) {
-            // Get all immediate child checkboxes
-            const childCheckboxes = Array.from(document.querySelectorAll<HTMLInputElement>(
-                `input[type="checkbox"][data-repo="${repoPath}"][data-section="${section}"]`
-            )).filter(checkbox => {
-                const checkboxDir = checkbox.dataset.dir;
-                const checkboxFile = checkbox.dataset.file;
-                if (!checkboxDir && !checkboxFile) return false;
-                
-                // Check if this is an immediate child
-                const path = checkboxFile || checkboxDir;
-                const parentDir = path?.split('/').slice(0, -1).join('/');
-                return parentDir === currentPath;
+        if (dirCheckbox) {
+            // Get all files under this directory
+            const filesUnderDir = fileCheckboxes.filter(cb => {
+                const filePath = cb.dataset.file;
+                return filePath && (
+                    filePath === currentPath || // Exact match
+                    filePath.startsWith(currentPath + '/') // Under this directory
+                );
             });
-            
-            if (childCheckboxes.length > 0) {
-                const allChecked = childCheckboxes.every(cb => cb.checked);
-                const someChecked = childCheckboxes.some(cb => cb.checked);
+
+            if (filesUnderDir.length > 0) {
+                const allChecked = filesUnderDir.every(cb => cb.checked);
+                const someChecked = filesUnderDir.some(cb => cb.checked);
                 
-                parentCheckbox.checked = allChecked;
-                parentCheckbox.indeterminate = !allChecked && someChecked;
+                dirCheckbox.checked = allChecked;
+                dirCheckbox.indeterminate = !allChecked && someChecked;
             }
         }
     }
@@ -644,7 +661,7 @@ function createFileTree(files: string[]): FileTreeNode {
         // Add the file to the final directory's _files array
         const fileName = parts[parts.length - 1];
         if (fileName) {
-            currentNode._files.push(file);
+            currentNode._files.push(file); // Store full path
         }
     });
     
@@ -899,6 +916,7 @@ function handleCommit(): void {
     }
 
     log('[handleCommit] Sending commit message to VS Code');
+    log('[handleCommit] Selected paths', 'info', selectedPaths);
     vscode.postMessage({
         command: 'commit',
         message: commitMessage,
@@ -1225,8 +1243,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     // Create file nodes for files in this directory
     const filesInDir = fileTree._files || [];
     filesInDir.forEach(file => {
-        const relativePath = file.split('/').pop();
-        if (relativePath) {
+        if (file) {
             childrenDiv.appendChild(createFileNode(repoPath, file, section));
         }
     });
@@ -1284,7 +1301,7 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
 
     const label = document.createElement('span');
     label.className = 'tree-label';
-    label.textContent = file.split('/').pop() || file;
+    label.textContent = file;
     contentDiv.appendChild(label);
 
     fileNode.appendChild(contentDiv);
