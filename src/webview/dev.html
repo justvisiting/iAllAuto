@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Changes (Dev)</title>
+    <link href="assets/codicon.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet">
+    <!-- Mock VS Code styles -->
+    <style>
+        @font-face {
+            font-family: "codicon";
+            src: url("assets/codicon.ttf") format("truetype");
+        }
+        :root {
+            --vscode-foreground: #cccccc;
+            --vscode-font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            --vscode-panel-border: #454545;
+            --vscode-sideBarSectionHeader-background: #6969c1;
+            --vscode-sideBarTitle-foreground: #bbbbbb;
+            --vscode-list-activeSelectionBackground: #094771;
+            --vscode-list-activeSelectionForeground: #ffffff;
+            --vscode-list-hoverBackground: #95c4d4;
+            --vscode-gitDecoration-modifiedResourceForeground: #e2c08d;
+            --vscode-gitDecoration-untrackedResourceForeground: #73c991;
+            --vscode-button-background: #0e639c;
+            --vscode-button-foreground: #ffffff;
+            --vscode-button-hoverBackground: #1177bb;
+            --vscode-input-background: #c55353;
+            --vscode-input-foreground: #cccccc;
+            --vscode-input-border: #591818;
+            --vscode-checkbox-background: #ebc7c7;
+            --vscode-errorForeground: #f48771;
+            --vscode-descriptionForeground: #cccccc80;
+            --vscode-sideBarSectionHeader-foreground: #cccccc;
+        }
+        body {
+            background: #352fdb;
+            margin: 0;
+            padding: 0;
+        }
+        /* Development-only styles */
+        .dev-controls {
+            padding: 8px;
+            background: #9c6262;
+            border-bottom: 1px solid #555;
+        }
+        .dev-controls button {
+            margin-right: 8px;
+            padding: 4px 8px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+        .dev-controls button:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+    </style>
+</head>
+<body>
+    <!-- Development controls -->
+    <div class="dev-controls">
+        <button onclick="simulateError()">Simulate Error</button>
+        <button onclick="simulateLoading()">Simulate Loading</button>
+        <button onclick="simulateEmpty()">Simulate Empty</button>
+    </div>
+    <div class="container">
+        <div id="tree-root"></div>
+        <div id="commit-section">
+            <textarea id="commit-message" placeholder="Enter commit message"></textarea>
+            <button id="commit-button" disabled>Commit Changes</button>
+        </div>
+        <div id="status-message"></div>
+    </div>
+    <!-- Mock VS Code API -->
+    <script>
+        // Mock VS Code API
+        window.acquireVsCodeApi = () => ({
+            postMessage: (message) => {
+                console.log('Message to VS Code:', message);
+                // Simulate response after 500ms
+                if (message.type === 'refresh') {
+                    setTimeout(() => {
+                        window.postMessage({
+                            type: 'updateChanges',
+                            status: window.currentMockData
+                        }, '*');
+                    }, 500);
+                }
+            },
+            setState: (state) => console.log('setState:', state),
+            getState: () => null
+        });
+
+        // Mock git status data for testing
+        window.mockGitStatus = {
+            repositories: {
+                '/Users/hitech/github/iAllAuto': {
+                    versioned: [
+                        'src/webview/script.ts',
+                        'src/extension.ts',
+                        'package.json',
+                        'src/webview/styles.css'
+                    ],
+                    unversioned: [
+                        '.vscode/launch.json',
+                        'webpack.config.js',
+                        'docs/notes.md'
+                    ]
+                },
+                '/Users/hitech/github/test-repo': {
+                    versioned: [
+                        'src/main.js',
+                        'src/app/x1/main.js',
+                        'src/app/x1/x11/main2.js',
+                        'lib/utils/helper.js',
+                        'tests/main.test.js'
+                    ],
+                    unversioned: [
+                        'temp/debug.log',
+                        'docs/draft.md',
+                        'src/app/x1/mainu.js',
+                        'src/app/x1/main3.js',
+                        'src/app/x1/x11/mainu.js',
+                    ]
+                }
+            }
+        };
+
+        window.currentMockData = window.mockGitStatus;
+
+        // Development helper functions
+        function simulateError() {
+            window.postMessage({
+                type: 'error',
+                error: 'Failed to get git status: Connection error'
+            }, '*');
+        }
+
+        function simulateLoading() {
+            const statusDiv = document.getElementById('status-message');
+            if (statusDiv) {
+                statusDiv.textContent = 'Loading changes...';
+                statusDiv.style.color = '#666';
+            }
+            setTimeout(() => {
+                window.postMessage({
+                    type: 'updateChanges',
+                    status: window.mockGitStatus
+                }, '*');
+            }, 2000);
+        }
+
+        function simulateEmpty() {
+            window.currentMockData = { repositories: {} };
+            window.postMessage({
+                type: 'updateChanges',
+                status: window.currentMockData
+            }, '*');
+        }
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>

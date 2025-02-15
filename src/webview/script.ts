@@ -111,8 +111,11 @@ function toggleFile(repoPath: string, file: string): void {
         updateParentDirectoryCheckboxes(repoPath, dirPath, file.startsWith('.') ? 'unversioned' : 'tracking');
     }
 
-    // Update section checkbox state
+    // Update repo checkbox state
     const section = file.startsWith('.') ? 'unversioned' : 'tracking';
+    updateRepoCheckbox(repoPath, section);
+
+    // Update section checkbox state
     updateSectionCheckboxState(section);
 
     // Update commit button state
@@ -673,47 +676,92 @@ function toggleAllInSection(sectionId: Section): void {
 }
 
 function toggleDirectoryFiles(repoPath: string, dirPath: string, isChecked: boolean, section: Section): void {
+    console.log('in togglerDir')
+    console.log(`[toggleDirectoryFiles] Toggling directory: ${dirPath} in repo: ${repoPath}, isChecked: ${isChecked}`);
+    
     const fileTree = currentFilesBySection[repoPath]?.[section];
     if (!fileTree) return;
 
     const subtree = getSubtreeFromPath(fileTree, dirPath);
     if (!subtree) return;
 
-    // Get all files under this directory and its subdirectories
+    // Get all files under this directory
     const allFiles = getAllFilesUnderTree(subtree);
+    console.log(`[toggleDirectoryFiles] Files under directory:`, allFiles);
 
-    // Toggle all files
+    // Get or create the set of selected files for this repo
+    let repoFiles = selectedFiles.get(repoPath);
+    if (!repoFiles) {
+        repoFiles = new Set();
+        selectedFiles.set(repoPath, repoFiles);
+    }
+
+    // Update selected files based on checkbox state
     allFiles.forEach(file => {
         if (isChecked) {
-            selectFile(repoPath, file);
+            repoFiles?.add(file);
         } else {
-            unselectFile(repoPath, file);
+            repoFiles?.delete(file);
         }
     });
 
+    updateView();
+    
     // Update parent directory checkboxes
     updateParentDirectoryCheckboxes(repoPath, dirPath, section);
     
     // Update child directory checkboxes
     updateChildDirectoryCheckboxes(repoPath, dirPath, isChecked, section);
 
+    // Update repo checkbox state
+    updateRepoCheckbox(repoPath, section);
+    
+    // Update section checkbox state
+    updateSectionCheckboxState(section);
+
     updateCommitButton();
-    updateView();
+    
+    
+
 }
 
 function updateChildDirectoryCheckboxes(repoPath: string, dirPath: string, isChecked: boolean, section: Section): void {
-    // Update immediate child checkboxes
-    const selector = `.directory-checkbox[data-repo="${repoPath}"][data-dir^="${dirPath}/"]`;
-    const childCheckboxes = document.querySelectorAll(selector);
-    
-    childCheckboxes.forEach(checkbox => {
-        const childPath = (checkbox as HTMLInputElement).dataset.dir || '';
-        const subtree = getSubtreeFromPath(currentFilesBySection[repoPath]?.[section], childPath);
-        if (subtree) {
-            (checkbox as HTMLInputElement).checked = isChecked;
-            (checkbox as HTMLInputElement).indeterminate = false;
+    const fileTree = currentFilesBySection[repoPath]?.[section];
+    if (!fileTree) return;
+
+    // Get all subdirectories
+    const subtree = getSubtreeFromPath(fileTree, dirPath);
+    if (!subtree) return;
+
+    // Use a stack to traverse all subdirectories
+    const stack = [{ path: dirPath, tree: subtree }];
+    while (stack.length > 0) {
+        const { path, tree } = stack.pop()!;
+
+        // Update current directory's checkbox
+        const dirId = `${section}-${repoPath}-${path}`.replace(/[^a-zA-Z0-9-]/g, '-');
+        const dirNode = document.getElementById(dirId);
+        if (dirNode) {
+            const checkbox = dirNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+            if (checkbox) {
+                const filesUnderDir = getAllFilesUnderTree(tree);
+                const selectedFilesInRepo = selectedFiles.get(repoPath) || new Set();
+                const allSelected = filesUnderDir.every(file => selectedFilesInRepo.has(file));
+                const someSelected = filesUnderDir.some(file => selectedFilesInRepo.has(file));
+                
+                checkbox.checked = allSelected;
+                checkbox.indeterminate = !allSelected && someSelected;
+            }
         }
-    });
+
+        // Add subdirectories to stack
+        for (const [name, childTree] of Object.entries(tree)) {
+            if (name !== '_files' && typeof childTree !== 'string') {
+                const subPath = path ? `${path}/${name}` : name;
+                stack.push({ path: subPath, tree: childTree as FileTreeNode });
+            }
+        }
+    }
 }
 
 function getAllFilesUnderTree(tree: FileTreeNode): string[] {
@@ -1021,6 +1069,42 @@ function unselectFile(repoPath: string, file: string): void {
 function isFileSelected(repoPath: string, file: string): boolean {
     const repoFiles = selectedFiles.get(repoPath);
     return Boolean(repoFiles && repoFiles.has(file));
+}
+
+function updateRepoCheckbox(repoPath: string, section: Section): void {
+    console.log(`[updateRepoCheckbox] Updating repo checkbox for ${repoPath}, section: ${section}`);
+    
+    const repoId = `${section}-${repoPath}`.replace(/[^a-zA-Z0-9-]/g, '-');
+    const repoNode = document.getElementById(repoId);
+    if (!repoNode) {
+        console.log(`[updateRepoCheckbox] No repo node found for ID: ${repoId}`);
+        return;
+    }
+
+    const checkbox = repoNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (!checkbox) {
+        console.log(`[updateRepoCheckbox] No checkbox found in repo node`);
+        return;
+    }
+
+    const fileTree = currentFilesBySection[repoPath]?.[section];
+    if (!fileTree) {
+        console.log(`[updateRepoCheckbox] No file tree found for repo`);
+        return;
+    }
+
+    const allFiles = getAllFilesUnderTree(fileTree);
+    const repoFiles = selectedFiles.get(repoPath) || new Set();
+
+    const allSelected = allFiles.every(f => repoFiles.has(f));
+    const someSelected = allFiles.some(f => repoFiles.has(f));
+
+    console.log(`[updateRepoCheckbox] Files status - all: ${allSelected}, some: ${someSelected}`);
+    console.log(`[updateRepoCheckbox] All files:`, allFiles);
+    console.log(`[updateRepoCheckbox] Selected files:`, Array.from(repoFiles));
+
+    checkbox.checked = allSelected;
+    checkbox.indeterminate = !allSelected && someSelected;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
