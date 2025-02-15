@@ -72,8 +72,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "tsc -p ./ && webpack --mode development",
+    "watch": "webpack --watch --mode development",
+    "dev": "webpack --watch --mode development & node dev-server.js",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test"
@@ -87,9 +88,14 @@
     "@vscode/test-cli": "^0.0.4",
     "@vscode/test-electron": "^2.3.8",
     "eslint": "^8.56.0",
-    "typescript": "^5.3.3"
+    "source-map-loader": "^5.0.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.3.3",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.36",
     "simple-git": "^3.22.0"
   }
 }

@@ -115,7 +115,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
+        _context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
     ) {
         console.log('Resolving webview view...');
@@ -123,7 +123,12 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri]
+            enableCommandUris: true,
+            localResourceRoots: [
+                this._extensionUri,
+                vscode.Uri.joinPath(this._extensionUri, 'out'),
+                vscode.Uri.joinPath(this._extensionUri, 'src')
+            ]
         };
 
         webviewView.webview.html = await this._getHtmlForWebview(webviewView.webview);
@@ -145,7 +150,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         });
 
         // Initial update
-        console.log('Performing initial update...');
+        console.log('Performing initial update...', webviewView.webview.html);
         await this._updateChanges();
     }
 
@@ -306,49 +311,50 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         await this._updateChanges();
     }
 
-    private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
-        // Get paths to files
-        const htmlPath = path.join(this._extensionPath, 'src', 'webview', 'commit-view.html');
-        const cssPath = path.join(this._extensionPath, 'src', 'webview', 'styles.css');
-        const jsOutPath = path.join(this._extensionPath, 'out', 'webview', 'script.js');
+    private _getHtmlForWebview(webview: vscode.Webview): string {
+        // Get paths to resource files
+        const scriptPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'script.js');
+        const stylesPath = vscode.Uri.joinPath(this._extensionUri, 'src', 'webview', 'styles.css');
+        const codiconsUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css'));
 
-        // Compile TypeScript to JavaScript
-        try {
-            await new Promise<void>((resolve, reject) => {
-                const tsc = require.resolve('typescript/bin/tsc');
-                const { spawn } = require('child_process');
-                const compile = spawn('node', [tsc, '-p', path.join(this._extensionPath, 'src', 'webview')]);
-                
-                compile.stdout.on('data', (data: Buffer) => {
-                    console.log(`TypeScript compilation output: ${data}`);
-                });
-                
-                compile.stderr.on('data', (data: Buffer) => {
-                    console.error(`TypeScript compilation error: ${data}`);
-                });
-                
-                compile.on('close', (code: number) => {
-                    if (code === 0) {
-                        resolve();
-                    } else {
-                        reject(new Error(`TypeScript compilation failed with code ${code}`));
-                    }
-                });
-            });
-        } catch (error) {
-            console.error('Failed to compile TypeScript:', error);
-            throw error;
-        }
+        // And get the resource URIs
+        const scriptUri = webview.asWebviewUri(scriptPath);
+        const stylesUri = webview.asWebviewUri(stylesPath);
 
-        let html = await fs.promises.readFile(htmlPath, 'utf8');
-        const css = await fs.promises.readFile(cssPath, 'utf8');
-        const js = await fs.promises.readFile(jsOutPath, 'utf8');
-
-        // Replace placeholders with actual content
-        html = html.replace('/* Content will be replaced with styles.css */', css);
-        html = html.replace('/* Content will be replaced with script.js */', js);
-
-        return html;
+        return `<!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} https:; script-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:;">
+                <link href="${codiconsUri}" rel="stylesheet" />
+                <link href="${stylesUri}" rel="stylesheet">
+                <title>Git Changes</title>
+            </head>
+            <body>
+                <div class="container">
+                    <div id="tree-root"></div>
+                    <div id="commit-section">
+                        <textarea id="commit-message" placeholder="Enter commit message"></textarea>
+                        <button id="commit-button" disabled>Commit Changes</button>
+                    </div>
+                    <div id="status-message"></div>
+                </div>
+                <script>
+                    console.log('Setting up error handlers...');
+                    window.onerror = function(msg, url, line, col, error) {
+                        console.error('Global error:', { message: msg, url, line, col, error });
+                        const statusDiv = document.getElementById('status-message');
+                        if (statusDiv) {
+                            statusDiv.textContent = 'Error: ' + msg;
+                            statusDiv.style.color = 'red';
+                        }
+                        return false;
+                    };
+                </script>
+                <script src="${scriptUri}"></script>
+            </body>
+            </html>`;
     }
 
     public show() {
