@@ -403,14 +403,14 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                 <title>Git Changes</title>
             </head>
             <body>
-                <div class="container">
+                
                     <div id="tree-root"></div>
                     <div id="commit-section">
                         <textarea id="commit-message" placeholder="Enter commit message"></textarea>
                         <button id="commit-button" disabled>Commit Changes</button>
                     </div>
                     <div id="status-message"></div>
-                </div>
+                
                 <script>
                     console.log('Setting up error handlers...');
                     window.onerror = function(msg, url, line, col, error) {
