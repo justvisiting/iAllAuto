@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (commitMessage) {
         commitMessage.addEventListener('input', updateCommitButton);
     }
-    
+        
         
 });
 
@@ -514,9 +514,6 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
     log('Created section node', 'info', sectionNode);
     return { sectionNode, childrenDiv };
 }
-
-
-
 function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
     log(`Toggling directory ${dirPath} in repo ${repoPath} to ${checked}`);
     
@@ -647,6 +644,7 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
 
     const checkbox = document.createElement('input') as HTMLInputElement;
     checkbox.type = 'checkbox';
+    checkbox.id = `${section}-${repoPath}-checkbox`;
     checkbox.className = 'tree-checkbox';
     checkbox.dataset.repo = repoPath;
     checkbox.dataset.section = section;
@@ -1014,6 +1012,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     contentDiv.appendChild(toggleSpan);
 
     const checkbox = document.createElement('input') as HTMLInputElement;
+    checkbox.id = `${section}-${repoPath}-${dirPath}-checkbox`;
     checkbox.type = 'checkbox';
     checkbox.className = 'tree-checkbox';
     checkbox.dataset.repo = repoPath;
@@ -1090,6 +1089,7 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     checkbox.dataset.file = file;
     checkbox.dataset.section = section;
     checkbox.checked = isFileSelected(repoPath, file, section);
+    checkbox.id = `${section}-${repoPath}-${file}-checkbox`;
     checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
             selectFile(repoPath, file, section);
@@ -1234,3 +1234,105 @@ function updateSectionCheckboxStates(): void {
         }
     });
 }
+
+function printElementInfo(message: string, element: HTMLElement | null): void {
+    console.log(message, {
+        id: element?.id,
+        className: element?.className,
+        dataset: element?.dataset,
+        tagName: element?.tagName
+    });
+}
+
+function isElementVisible(element: HTMLElement): boolean {
+    return !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+}
+
+
+/*
+* Gets the next visible sibling element of a given element.
+*
+* @param {HTMLElement} element The element to start searching from.
+* @param {boolean} [includeSelf=false]  Whether to include the starting element in the search.  Defaults to false.
+* @param {string} [selector] Optional CSS selector to filter visible elements.
+* @returns {HTMLElement | null} The next visible sibling element, or null if none is found.
+*/
+function getNextVisibleElement(element: HTMLElement, includeSelf: boolean = false, selector?: string): HTMLElement | null {
+   if (!element) {
+       return null;
+   }
+
+   console.log('getNextVisibleElement: Getting next visible element from', element);
+   let nextSibling: HTMLElement | null = includeSelf ? element : element. as HTMLElement;
+   
+
+   while (nextSibling) {
+    printElementInfo('Next sibling:', nextSibling);
+       // Check if the element is visible.  Use a combination of checks
+       // for best cross-browser compatibility.  The element must:
+       // 1.  Not have display: none
+       // 2.  Not have visibility: hidden
+       // 3.  Have a non-zero offsetWidth or offsetHeight (meaning it takes up space).
+       // 4.  (Optionally) match a provided selector.
+       const style = window.getComputedStyle(nextSibling);
+       console.log('  Style:', style);
+       const isVisible = (
+         style.display !== 'none' &&
+         style.visibility !== 'hidden' &&
+         (nextSibling.offsetWidth > 0 || nextSibling.offsetHeight > 0)
+       );
+
+       const matchesSelector = selector ? nextSibling.matches(selector) : true;
+       
+       if (isVisible && matchesSelector) {
+           printElementInfo('Next sibling found which match the criteria: ' + selector, nextSibling);
+           return nextSibling;
+       }
+
+       nextSibling = nextSibling.nextElementSibling as HTMLElement;
+   }
+
+   return null;
+}
+
+document.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        const activeElement = document.activeElement as HTMLElement;
+        if (activeElement) {
+            console.log('Active element attributes:' + event.key, {
+                id: activeElement.id,
+                className: activeElement.className,
+                dataset: activeElement.dataset,
+                tagName: activeElement.tagName
+            });
+        }
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            const checkboxes: NodeListOf<HTMLInputElement> = document.querySelectorAll('input[type="checkbox"]');
+            const visibleElements = Array.from(checkboxes).filter(isElementVisible) as HTMLInputElement[];
+            const currentIndex = activeElement instanceof HTMLInputElement ? visibleElements.indexOf(activeElement) : -1;
+            const nextElement = visibleElements[currentIndex + 1] //|| visibleElements[0];
+            //const nextVisibleElement = getNextVisibleElement(activeElement, false, 'input[type="checkbox"]') as HTMLElement;
+            printElementInfo('Next visible element:', nextElement);
+            if (nextElement) {
+                nextElement.focus();
+            } else {
+                //activeElement.focus();
+            }
+        }
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            const checkboxes: NodeListOf<HTMLInputElement> = document.querySelectorAll('input[type="checkbox"]');
+            const visibleElements = Array.from(checkboxes).filter(isElementVisible) as HTMLInputElement[];
+            const currentIndex = activeElement instanceof HTMLInputElement ? visibleElements.indexOf(activeElement) : -1;
+            const nextElement = visibleElements[currentIndex - 1] //|| visibleElements[0];
+            //const nextVisibleElement = getNextVisibleElement(activeElement, false, 'input[type="checkbox"]') as HTMLElement;
+            printElementInfo('Next visible element:', nextElement);
+            if (nextElement) {
+                nextElement.focus();
+            } else {
+                //activeElement.focus();
+            }
+        }
+    }
+});
