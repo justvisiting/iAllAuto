@@ -260,6 +260,10 @@ window.addEventListener('message', event => {
                 log(`Error opening diff for file ${message.file}: ${message.error}`, 'error');
                 break;
                 
+            case 'gitAdd':
+                log(`Git add successful for file: ${message.file}`, 'success');
+                break;
+                
             default:
                 break;
                 //log('Unknown message type/command: ' + (message.type || message.command), 'error');
@@ -1219,11 +1223,31 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     });
     contentDiv.appendChild(checkbox);
 
-    
     const label = document.createElement('span');
     label.className = 'tree-label';
     label.textContent = file.split('/').pop() || file; // Show only filename
     contentDiv.appendChild(label);
+
+    // Add git add button for unversioned files
+    if (section === 'unversioned') {
+        const addButton = document.createElement('button');
+        addButton.className = 'git-add-button';
+        addButton.title = 'Git Add';
+        addButton.textContent = '+';
+        addButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const fullPath = repoPath ? `${repoPath}/${file}` : file;
+            log(`Requesting git add for file: ${fullPath}`);
+            vscode.postMessage({
+                type: 'gitAdd',
+                file: fullPath,
+                repo: repoPath,
+                requestId: Date.now().toString()
+            });
+        });
+        contentDiv.appendChild(addButton);
+    }
 
     fileNode.appendChild(contentDiv);
     return fileNode;

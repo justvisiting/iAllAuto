@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { simpleGit, SimpleGit } from 'simple-git';
+import { GitExecutor } from './gitExecutor';
 
 interface GitRepositoryConfig {
     baseFolders?: string[];
@@ -231,6 +232,34 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                     break;
+                case 'gitAdd':
+                        try {
+                            const { file, repo } = data;
+                            // Change to repo directory and execute git add
+                            const gitExec = new GitExecutor(repo);
+                            await gitExec.add(file);
+                            
+                            // Send success response
+                            webviewView.webview.postMessage({
+                                type: 'gitAdd',
+                                success: true,
+                                file: data.file,
+                                requestId: data.requestId
+                            });
+                            
+                            // Refresh the view to show updated status
+                            await this.refresh();
+                        } catch (error: any) {
+                            console.error('Error in git add:', error);
+                            webviewView.webview.postMessage({
+                                type: 'gitAdd',
+                                success: false,
+                                file: data.file,
+                                error: error?.message || 'Unknown error occurred',
+                                requestId: data.requestId
+                            });
+                        }
+                        break;
             }
         });
 
