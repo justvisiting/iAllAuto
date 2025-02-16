@@ -514,6 +514,7 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
     log('Created section node', 'info', sectionNode);
     return { sectionNode, childrenDiv };
 }
+
 function toggleDirectoryFiles(repoPath: string, dirPath: string, checked: boolean, section: Section): void {
     log(`Toggling directory ${dirPath} in repo ${repoPath} to ${checked}`);
     
@@ -881,7 +882,6 @@ function focusNode(node: TreeNode): void {
     node.scrollIntoView({ block: 'nearest' });
 }
 
-
 function isTreeNode(element: Element | null): element is TreeNode {
     return element !== null && element.classList.contains('tree-node');
 }
@@ -1248,55 +1248,46 @@ function isElementVisible(element: HTMLElement): boolean {
     return !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
 }
 
-
-/*
-* Gets the next visible sibling element of a given element.
-*
-* @param {HTMLElement} element The element to start searching from.
-* @param {boolean} [includeSelf=false]  Whether to include the starting element in the search.  Defaults to false.
-* @param {string} [selector] Optional CSS selector to filter visible elements.
-* @returns {HTMLElement | null} The next visible sibling element, or null if none is found.
-*/
 function getNextVisibleElement(element: HTMLElement, includeSelf: boolean = false, selector?: string): HTMLElement | null {
-   if (!element) {
-       return null;
-   }
+    if (!element) {
+        return null;
+    }
 
-   console.log('getNextVisibleElement: Getting next visible element from', element);
-   let nextSibling: HTMLElement | null = includeSelf ? element : element. as HTMLElement;
+    console.log('getNextVisibleElement: Getting next visible element from', element);
+    let nextSibling: HTMLElement | null = includeSelf ? element : element.nextElementSibling as HTMLElement;
    
 
-   while (nextSibling) {
-    printElementInfo('Next sibling:', nextSibling);
-       // Check if the element is visible.  Use a combination of checks
-       // for best cross-browser compatibility.  The element must:
-       // 1.  Not have display: none
-       // 2.  Not have visibility: hidden
-       // 3.  Have a non-zero offsetWidth or offsetHeight (meaning it takes up space).
-       // 4.  (Optionally) match a provided selector.
-       const style = window.getComputedStyle(nextSibling);
-       console.log('  Style:', style);
-       const isVisible = (
-         style.display !== 'none' &&
-         style.visibility !== 'hidden' &&
-         (nextSibling.offsetWidth > 0 || nextSibling.offsetHeight > 0)
-       );
+    while (nextSibling) {
+        printElementInfo('Next sibling:', nextSibling);
+        // Check if the element is visible.  Use a combination of checks
+        // for best cross-browser compatibility.  The element must:
+        // 1.  Not have display: none
+        // 2.  Not have visibility: hidden
+        // 3.  Have a non-zero offsetWidth or offsetHeight (meaning it takes up space).
+        // 4.  (Optionally) match a provided selector.
+        const style = window.getComputedStyle(nextSibling);
+        console.log('  Style:', style);
+        const isVisible = (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            (nextSibling.offsetWidth > 0 || nextSibling.offsetHeight > 0)
+        );
 
-       const matchesSelector = selector ? nextSibling.matches(selector) : true;
+        const matchesSelector = selector ? nextSibling.matches(selector) : true;
        
-       if (isVisible && matchesSelector) {
-           printElementInfo('Next sibling found which match the criteria: ' + selector, nextSibling);
-           return nextSibling;
-       }
+        if (isVisible && matchesSelector) {
+            printElementInfo('Next sibling found which match the criteria: ' + selector, nextSibling);
+            return nextSibling;
+        }
 
-       nextSibling = nextSibling.nextElementSibling as HTMLElement;
-   }
+        nextSibling = nextSibling.nextElementSibling as HTMLElement;
+    }
 
-   return null;
+    return null;
 }
 
 document.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         const activeElement = document.activeElement as HTMLElement;
         if (activeElement) {
             console.log('Active element attributes:' + event.key, {
@@ -1312,12 +1303,9 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
             const visibleElements = Array.from(checkboxes).filter(isElementVisible) as HTMLInputElement[];
             const currentIndex = activeElement instanceof HTMLInputElement ? visibleElements.indexOf(activeElement) : -1;
             const nextElement = visibleElements[currentIndex + 1] //|| visibleElements[0];
-            //const nextVisibleElement = getNextVisibleElement(activeElement, false, 'input[type="checkbox"]') as HTMLElement;
             printElementInfo('Next visible element:', nextElement);
             if (nextElement) {
                 nextElement.focus();
-            } else {
-                //activeElement.focus();
             }
         }
         if (event.key === 'ArrowUp') {
@@ -1326,12 +1314,41 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
             const visibleElements = Array.from(checkboxes).filter(isElementVisible) as HTMLInputElement[];
             const currentIndex = activeElement instanceof HTMLInputElement ? visibleElements.indexOf(activeElement) : -1;
             const nextElement = visibleElements[currentIndex - 1] //|| visibleElements[0];
-            //const nextVisibleElement = getNextVisibleElement(activeElement, false, 'input[type="checkbox"]') as HTMLElement;
             printElementInfo('Next visible element:', nextElement);
             if (nextElement) {
                 nextElement.focus();
-            } else {
-                //activeElement.focus();
+            }
+        }
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            event.preventDefault();
+            // Find the closest parent tree-node or section
+            const treeNode = activeElement.closest('.tree-node');
+            if (treeNode) {
+                const childrenDiv = treeNode.querySelector('.tree-children') as HTMLElement;
+                const toggleSpan = treeNode.querySelector('.codicon') as HTMLElement;
+                if (childrenDiv && toggleSpan) {
+                    if (event.key === 'ArrowRight' && !childrenDiv.classList.contains('expanded')) {
+                        childrenDiv.classList.add('expanded');
+                        toggleSpan.classList.remove('codicon-chevron-right');
+                        toggleSpan.classList.add('codicon-chevron-down');
+                        
+                        // Focus the first visible checkbox in the expanded node
+                        const firstCheckbox = childrenDiv.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                        if (firstCheckbox && isElementVisible(firstCheckbox)) {
+                            firstCheckbox.focus();
+                        }
+                    } else if (event.key === 'ArrowLeft' && childrenDiv.classList.contains('expanded')) {
+                        childrenDiv.classList.remove('expanded');
+                        toggleSpan.classList.remove('codicon-chevron-down');
+                        toggleSpan.classList.add('codicon-chevron-right');
+                        
+                        // Focus the parent node's checkbox
+                        const parentCheckbox = treeNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                        if (parentCheckbox) {
+                        //    parentCheckbox.focus();
+                        }
+                    }
+                }
             }
         }
     }
