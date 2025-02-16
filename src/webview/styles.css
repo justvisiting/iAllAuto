@@ -440,14 +440,14 @@ input[type="checkbox"] {
 }
 
 .section-title {
-    font-weight: bold;
-    padding: 4px 8px;
+    font-weight: 600;
+    padding: none;
+    color: var(--vscode-foreground);
     background-color: var(--vscode-sideBarSectionHeader-background);
-    border-bottom: 1px solid var(--vscode-panel-border);
 }
 
 .section-content {
-    padding: 4px 0;
+    padding-left: 4px;
 }
 
 .container {

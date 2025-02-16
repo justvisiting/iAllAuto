@@ -356,7 +356,7 @@ function updateView(): void {
     
     if (versionedRepos.length > 0) {
         log('Creating tracking section for repos: ' + versionedRepos.map(([repo]) => repo).join(', '));
-        const { sectionNode, childrenDiv } = createSectionNode('tracking', 'Tracking');
+        const { sectionNode, childrenDiv } = createSectionNode('tracking', 'TRACKING');
         
         versionedRepos.forEach(([repoPath, status]) => {
             const fileTree = createFileTree(status.versioned);
@@ -374,7 +374,7 @@ function updateView(): void {
     
     if (unversionedRepos.length > 0) {
         log('Creating unversioned section for repos: ' + unversionedRepos.map(([repo]) => repo).join(', '));
-        const { sectionNode, childrenDiv } = createSectionNode('unversioned', 'Unversioned');
+        const { sectionNode, childrenDiv } = createSectionNode('unversioned', 'UNVERSIONED');
         
         unversionedRepos.forEach(([repoPath, status]) => {
             const fileTree = createFileTree(status.unversioned);
