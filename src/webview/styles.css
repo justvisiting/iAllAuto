@@ -77,19 +77,34 @@ body {
     align-items: center;
     padding: 2px 0;
     cursor: pointer;
+    width: 100%;
 }
 
 .tree-content:hover {
     background-color: var(--vscode-list-hoverBackground);
 }
 
+.tree-content:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.tree-content:focus .codicon {
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
 .tree-toggle {
+    cursor: pointer;
+    user-select: none;
     width: 16px;
     height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-right: 4px;
+    color: var(--vscode-foreground);
+    font-size: 16px;
+    margin-right: 2px;
 }
 
 .tree-toggle.no-children {
@@ -97,12 +112,22 @@ body {
 }
 
 .tree-label {
-    margin-left: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    outline: none;
+}
+
+.tree-label:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    background-color: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
 }
 
 .tree-children {
-    display: none;
     margin-left: 16px;
+    display: none;
 }
 
 .tree-children.expanded {
@@ -122,7 +147,12 @@ body {
     background-color: var(--vscode-checkbox-background);
 }
 
+input[type="checkbox"]:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
 input[type="checkbox"] {
+    cursor: pointer;
     margin: 0;
 }
 
@@ -283,14 +313,14 @@ input[type="checkbox"] {
     outline: none;
 }
 
-.tree-node:focus > .tree-content,
-.section:focus > .section-title {
+.tree-content:has(> input:focus),
+.tree-content:has(> .tree-label:focus) {
     background-color: var(--vscode-list-activeSelectionBackground);
     color: var(--vscode-list-activeSelectionForeground);
 }
 
-.tree-node:focus > .tree-content .codicon,
-.section:focus > .section-title .codicon {
+.tree-content:has(> input:focus) .codicon,
+.tree-content:has(> .tree-label:focus) .codicon {
     color: var(--vscode-list-activeSelectionForeground);
 }
 
@@ -300,7 +330,14 @@ input[type="checkbox"] {
     background-color: var(--vscode-list-hoverBackground);
 }
 
-/* Push prompt styles */
+.tree-content {
+    display: flex;
+    align-items: center;
+    padding: 2px 0;
+    cursor: pointer;
+    width: 100%;
+}
+
 .push-prompt {
     position: fixed;
     top: 0;

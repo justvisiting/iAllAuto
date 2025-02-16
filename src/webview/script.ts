@@ -1311,92 +1311,96 @@ function moveToPreviousCheckbox(activeElement: HTMLElement): void {
 document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         const activeElement = document.activeElement as HTMLElement;
-        if (activeElement) {
-            console.log('Active element attributes:' + event.key, {
-                id: activeElement.id,
-                className: activeElement.className,
-                dataset: activeElement.dataset,
-                tagName: activeElement.tagName
-            });
-        }
-        if (event.key === 'ArrowDown') {
+        if (!activeElement) return;
+
+        // Prevent default behavior for arrow keys
+        if (event.key !== 'Tab') {
             event.preventDefault();
+            event.stopPropagation();
+        }
+
+        console.log('Active element:', {
+            id: activeElement.id,
+            className: activeElement.className,
+            tagName: activeElement.tagName,
+            type: activeElement.getAttribute('type')
+        });
+
+        if (event.key === 'ArrowDown') {
             moveToNextCheckbox(activeElement);
+            return;
         }
         if (event.key === 'ArrowUp') {
-            event.preventDefault();
             moveToPreviousCheckbox(activeElement);
+            return;
         }
-        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-            event.preventDefault();
-            // Find the closest parent tree-node or section
-            const treeNode = activeElement.closest('.tree-node');
-            if (treeNode) {
-                const childrenDiv = treeNode.querySelector('.tree-children') as HTMLElement;
-                const toggleSpan = treeNode.querySelector('.codicon') as HTMLElement;
-                if (childrenDiv && toggleSpan) {
-                    if (event.key === 'ArrowRight') {
-                        if (!childrenDiv.classList.contains('expanded')) {
-                            childrenDiv.classList.add('expanded');
-                            toggleSpan.classList.remove('codicon-chevron-right');
-                            toggleSpan.classList.add('codicon-chevron-down');
-                            
-                            // Focus the first visible checkbox in the expanded node
-                            const firstCheckbox = childrenDiv.querySelector('input[type="checkbox"]') as HTMLInputElement;
-                            if (firstCheckbox && isElementVisible(firstCheckbox)) {
-                                firstCheckbox.focus();
-                            } else {
-                                // If no expandable content, move to next checkbox like ArrowDown
-                                moveToNextCheckbox(activeElement);
-                            }
-                        } else {
-                            // Already expanded, move to next checkbox like ArrowDown
-                            moveToNextCheckbox(activeElement);
-                        }
-                    } else if (event.key === 'ArrowLeft') {
-                        if (childrenDiv.classList.contains('expanded')) {
-                            // If expanded, collapse it
-                            childrenDiv.classList.remove('expanded');
-                            toggleSpan.classList.remove('codicon-chevron-down');
-                            toggleSpan.classList.add('codicon-chevron-right');
-                        } else {
-                            // If not expanded, try to collapse parent
-                            const parentTreeNode = treeNode.parentElement?.closest('.tree-node');
-                            if (parentTreeNode) {
-                                const parentChildrenDiv = parentTreeNode.querySelector('.tree-children') as HTMLElement;
-                                const parentToggleSpan = parentTreeNode.querySelector('.codicon') as HTMLElement;
-                                if (parentChildrenDiv?.classList.contains('expanded')) {
-                                    parentChildrenDiv.classList.remove('expanded');
-                                    parentToggleSpan.classList.remove('codicon-chevron-down');
-                                    parentToggleSpan.classList.add('codicon-chevron-right');
-                                    const parentCheckbox = parentTreeNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
-                                    if (parentCheckbox) {
-                                        parentCheckbox.focus();
-                                    }
-                                } else {
-                                    moveToPreviousCheckbox(activeElement);
-                                }
-                            } else {
-                                moveToPreviousCheckbox(activeElement);
-                            }
-                        }
-                    }
+
+        // Handle ArrowRight and ArrowLeft
+        const treeNode = activeElement.closest('.tree-node');
+        if (!treeNode) {
+            // Not in a tree node, move like ArrowUp/Down
+            event.key === 'ArrowRight' ? moveToNextCheckbox(activeElement) : moveToPreviousCheckbox(activeElement);
+            return;
+        }
+
+        const childrenDiv = treeNode.querySelector('.tree-children') as HTMLElement;
+        const toggleSpan = treeNode.querySelector('.codicon') as HTMLElement;
+        if (!childrenDiv || !toggleSpan) {
+            // No expandable content, move like ArrowUp/Down
+            event.key === 'ArrowRight' ? moveToNextCheckbox(activeElement) : moveToPreviousCheckbox(activeElement);
+            return;
+        }
+
+        const isExpanded = childrenDiv.classList.contains('expanded');
+        if (event.key === 'ArrowRight') {
+            if (!isExpanded) {
+                // Expand and focus first child
+                childrenDiv.classList.add('expanded');
+                toggleSpan.classList.remove('codicon-chevron-right');
+                toggleSpan.classList.add('codicon-chevron-down');
+                
+                const firstCheckbox = childrenDiv.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                if (firstCheckbox && isElementVisible(firstCheckbox)) {
+                    firstCheckbox.focus();
+                    firstCheckbox.scrollIntoView({ block: 'nearest' });
                 } else {
-                    // No expandable content, move like ArrowUp/Down
-                    if (event.key === 'ArrowRight') {
-                        moveToNextCheckbox(activeElement);
-                    } else {
-                        moveToPreviousCheckbox(activeElement);
-                    }
+                    moveToNextCheckbox(activeElement);
                 }
             } else {
-                // Not in a tree node, move like ArrowUp/Down
-                if (event.key === 'ArrowRight') {
-                    moveToNextCheckbox(activeElement);
+                moveToNextCheckbox(activeElement);
+            }
+        } else { // ArrowLeft
+            if (isExpanded) {
+                childrenDiv.classList.remove('expanded');
+                toggleSpan.classList.remove('codicon-chevron-down');
+                toggleSpan.classList.add('codicon-chevron-right');
+                // Keep focus on current element
+                (activeElement as HTMLElement).focus();
+            } else {
+                const parentTreeNode = treeNode.parentElement?.closest('.tree-node');
+                if (parentTreeNode) {
+                    const parentCheckbox = parentTreeNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                    if (parentCheckbox) {
+                        parentCheckbox.focus();
+                        parentCheckbox.scrollIntoView({ block: 'nearest' });
+                    }
                 } else {
                     moveToPreviousCheckbox(activeElement);
                 }
             }
         }
+    }
+});
+
+// Add focus handlers for tree nodes
+document.querySelectorAll('.tree-node').forEach(node => {
+    const checkbox = node.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.addEventListener('focus', () => {
+            checkbox.parentElement?.classList.add('focused');
+        });
+        checkbox.addEventListener('blur', () => {
+            checkbox.parentElement?.classList.remove('focused');
+        });
     }
 });

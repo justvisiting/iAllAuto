@@ -358,7 +358,8 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     }
 
     public show() {
-        vscode.commands.executeCommand('vscode.openView', 'iallAutoCommitView', vscode.ViewColumn.One);
+        vscode.commands.executeCommand('workbench.view.scm');
+        vscode.commands.executeCommand('workbench.view.extension.iallAutoCommitView');
     }
 }
 
