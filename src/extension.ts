@@ -146,6 +146,29 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                 case 'push':
                     await this._pushChanges();
                     break;
+                case 'openFile':
+                    try {
+                        const uri = vscode.Uri.file(data.file);
+                        const doc = await vscode.workspace.openTextDocument(uri);
+                        await vscode.window.showTextDocument(doc);
+                        
+                        // Send success response
+                        webviewView.webview.postMessage({
+                            type: 'fileOpened',
+                            file: data.file,
+                            success: true
+                        });
+                    } catch (error: any) {
+                        console.error('Error opening file:', error);
+                        // Send error response
+                        webviewView.webview.postMessage({
+                            type: 'fileError',
+                            file: data.file,
+                            success: false,
+                            error: error?.message || 'Unknown error'
+                        });
+                    }
+                    break;
             }
         });
 

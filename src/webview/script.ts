@@ -92,7 +92,7 @@ let isTreeView: boolean = true;
 // Debug environment flag
 declare const __DEV__: boolean;
 const isDebugEnv = window.location.hostname === 'localhost';
-const isDevelopmentMode = isDebugEnv
+const isDevelopmentMode = true; 
 
 function log(message: string, type: 'info' | 'error' | 'success' = 'info', ...args: any[]): void {
     // Ignore messages containing 'hello'
@@ -180,7 +180,7 @@ window.addEventListener('message', event => {
     log('Received message: ' + JSON.stringify(message));
 
     try {
-        switch (message.type || message.command) {
+        switch (message.type) {
             case 'updateChanges':
                 log('Received updateChanges message: ' + JSON.stringify(message));
                 if (message.status) {
@@ -233,6 +233,19 @@ window.addEventListener('message', event => {
             case 'error':
                 log('Error: ' + message.error, 'error');
                 updateStatusMessage(message.error, 'error');
+                break;
+                
+            case 'openDiff':
+                // Handle any response from VS Code if needed
+                log('callback from VScode for diff')
+                break;
+                
+            case 'openFile':
+                log(`File opened successfully: ${message.file}`, 'success');
+                break;
+                
+            case 'fileError':
+                log(`Error opening file ${message.file}: ${message.error}`, 'error');
                 break;
                 
             default:
@@ -842,7 +855,7 @@ function handleCommit(): void {
         }
     } else {
         vscode.postMessage({
-            command: 'commit',
+            type: 'commit',
             message: commitMessage,
             files: selectedPaths
         });
@@ -996,7 +1009,7 @@ function showPushPrompt(): void {
     document.body.appendChild(pushPrompt);
 
     document.getElementById('push-yes')?.addEventListener('click', () => {
-        vscode.postMessage({ command: 'push' });
+        vscode.postMessage({ type: 'push' });
         pushPrompt.remove();
     });
 
@@ -1115,7 +1128,16 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     const contentDiv = document.createElement('div');
     contentDiv.className = 'tree-content';
     contentDiv.addEventListener('click', (e) => {
+        log('in file click handler');
         if (e.target === checkbox) return;
+        
+        const fullPath = repoPath ? `${repoPath}/${file}` : file;
+        log(`Requesting to open file: ${fullPath}`);
+        vscode.postMessage({
+            type: 'openFile',
+            file: fullPath,
+            requestId: Date.now().toString()
+        });
         requestAnimationFrame(() => checkbox.focus());
     });
 
