@@ -1489,30 +1489,7 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
                     moveToPreviousCheckbox(activeElement);
                 }
             }
-        } else if (event.key === 'Enter') {
-            log('Enter key pressed');
-            if (focusedNodeId) {
-                const focusedNode = document.getElementById(focusedNodeId);
-                if (focusedNode) {
-                    const file = focusedNode.getAttribute('data-file');
-                    const nodeRepoPath = focusedNode.getAttribute('data-repo');
-                    if (file) {
-                        const fullPath = nodeRepoPath ? `${nodeRepoPath}/${file}` : file;
-                        log(`Requesting to open diff for file: ${fullPath}`);
-                        vscode.postMessage({
-                            type: 'openDiff',
-                            file: fullPath,
-                            requestId: Date.now().toString()
-                        });
-                        event.preventDefault();
-                        event.stopPropagation();
-                        requestAnimationFrame(() => {
-                            const checkbox = focusedNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
-                            if (checkbox) checkbox.focus();
-                        });
-                    }
-                }
-            }
+        
         }
     }
 });

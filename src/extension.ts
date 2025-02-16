@@ -187,9 +187,11 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                                 
                                 // Open diff between working tree and HEAD
                                 await vscode.commands.executeCommand('vscode.diff',
-                                    uri,        // current working tree version
+                                    
                                     headUri,    // HEAD version from Git
-                                    `${data.file} (Working Tree ↔ HEAD)` // title
+                                    uri,        // current working tree version
+                                    `${data.file} (Working Tree ↔ HEAD)`, // title
+                                    { preserveFocus: true }  // Keep focus in webview
                                 );
                                 
                                 // Send success response
