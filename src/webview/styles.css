@@ -307,6 +307,26 @@ input[type="checkbox"] {
     text-align: center;
 }
 
+.codicon-chevron-right, .codicon-chevron-down {
+    font-family: codicon;
+    line-height: 16px;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+}
+
+.codicon-chevron-right::before {
+    content: "\eab6";
+}
+
+.codicon-chevron-down::before {
+    content: "\eab4";
+}
+
 /* Focus styles */
 .tree-node:focus,
 .section:focus {
@@ -415,7 +435,8 @@ input[type="checkbox"] {
 }
 
 .section {
-    margin-bottom: 8px;
+    padding: 0;
+    margin: 0;
 }
 
 .section-title {
