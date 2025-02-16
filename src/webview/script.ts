@@ -92,7 +92,7 @@ let isTreeView: boolean = true;
 // Debug environment flag
 declare const __DEV__: boolean;
 const isDebugEnv = window.location.hostname === 'localhost';
-const isDevelopmentMode = true; 
+const isDevelopmentMode = false; 
 
 function log(message: string, type: 'info' | 'error' | 'success' = 'info', ...args: any[]): void {
     // Ignore messages containing 'hello'

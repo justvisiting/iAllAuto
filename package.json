@@ -1,8 +1,12 @@
 {
-  "name": "iallauto",
+  "name": "iAllauto",
   "displayName": "iAllAuto",
-  "description": "VS Code extension for managing Git repositories",
-  "version": "0.0.1",
+  "description": "Git Extension for VS Code",
+  "version": "0.0.2",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justvisiting/iAllAuto"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -53,6 +57,11 @@
         "command": "iallAutoCommit.toggleViewMode",
         "title": "Toggle View Mode",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "iallAutoCommit.selectRepositories",
+        "title": "Select Repositories",
+        "icon": "$(repo-clone)"
       }
     ],
     "menus": {
@@ -64,6 +73,11 @@
         },
         {
           "command": "iallAutoCommit.toggleViewMode",
+          "when": "view == iallAutoCommitView",
+          "group": "navigation"
+        },
+        {
+          "command": "iallAutoCommit.selectRepositories",
           "when": "view == iallAutoCommitView",
           "group": "navigation"
         }

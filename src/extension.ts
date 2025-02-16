@@ -79,6 +79,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     private _gitRepos: Map<string, SimpleGit> = new Map();
     private _extensionPath: string;
     private _repositories: string[];
+    private _selectedRepos: Set<string> = new Set();
     private _isTreeView: boolean = true;
     private static _currentProvider: CommitViewProvider | undefined;
 
@@ -100,6 +101,14 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         return CommitViewProvider._currentProvider;
     }
 
+    public getRepositories(): string[] {
+        return this._repositories;
+    }
+
+    public getSelectedRepos(): Set<string> {
+        return this._selectedRepos;
+    }
+
     public refresh() {
         this._updateChanges();
     }
@@ -110,6 +119,11 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
         for (const repoPath of repositories) {
             this._gitRepos.set(repoPath, simpleGit(repoPath));
         }
+        this._updateChanges();
+    }
+
+    public updateSelectedRepos(repos: string[]) {
+        this._selectedRepos = new Set(repos);
         this._updateChanges();
     }
 
@@ -258,41 +272,52 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _getGitStatus(): Promise<GitStatus> {
-        const repositories: GitStatus['repositories'] = {};
+        const status: GitStatus = {
+            repositories: {}
+        };
 
-        // Get status for each repository
-        for (const [repoPath, git] of this._gitRepos.entries()) {
+        const reposToProcess = this._selectedRepos.size > 0 
+            ? Array.from(this._selectedRepos)
+            : this._repositories;
+
+        for (const repoPath of reposToProcess) {
             try {
                 console.log(`Getting status for repo: ${repoPath}`);
-                const status = await git.status();
-                console.log(`Raw status for ${repoPath}:`, status);
+                const git = this._gitRepos.get(repoPath);
+                if (!git) {
+                    console.error(`No git instance found for repo ${repoPath}`);
+                    continue;
+                }
+
+                const statusResult = await git.status();
+                console.log(`Raw status for ${repoPath}:`, statusResult);
                 
                 // All versioned files with changes
                 const versioned = [
-                    ...status.staged,
-                    ...status.created,
-                    ...status.modified,
-                    ...status.renamed.map(f => f.to),
-                    ...status.deleted
+                    ...statusResult.staged,
+                    ...statusResult.created,
+                    ...statusResult.modified,
+                    ...statusResult.renamed.map(f => f.to),
+                    ...statusResult.deleted
                 ];
 
                 // Files not tracked by git
-                const unversioned = [...status.not_added];
+                const unversioned = [...statusResult.not_added];
 
-                repositories[repoPath] = {
+                status.repositories[repoPath] = {
                     versioned: [...new Set(versioned)], // Remove duplicates
                     unversioned
                 };
                 
-                console.log(`Processed status for ${repoPath}:`, repositories[repoPath]);
+                console.log(`Processed status for ${repoPath}:`, status.repositories[repoPath]);
             } catch (error) {
                 console.error(`Error getting status for repo ${repoPath}:`, error);
-                repositories[repoPath] = { versioned: [], unversioned: [] };
+                status.repositories[repoPath] = { versioned: [], unversioned: [] };
             }
         }
 
-        console.log('Final git status:', { repositories });
-        return { repositories };
+        console.log('Final git status:', status);
+        return status;
     }
 
     private async _commitChanges(message: string, files: Array<{ path: string, repo: string }>) {
@@ -404,12 +429,12 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
             </head>
             <body>
                 
-                    <div id="tree-root"></div>
-                    <div id="commit-section">
-                        <textarea id="commit-message" placeholder="Enter commit message"></textarea>
-                        <button id="commit-button" disabled>Commit Changes</button>
-                    </div>
-                    <div id="status-message"></div>
+                <div id="tree-root"></div>
+                <div id="commit-section">
+                    <textarea id="commit-message" placeholder="Enter commit message"></textarea>
+                    <button id="commit-button" disabled>Commit Changes</button>
+                </div>
+                <div id="status-message"></div>
                 
                 <script>
                     console.log('Setting up error handlers...');
@@ -474,11 +499,35 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             );
 
+            const selectReposCommand = vscode.commands.registerCommand(
+                'iallAutoCommit.selectRepositories',
+                async () => {
+                    const repos = provider.getRepositories();
+                    const items = repos.map(repo => ({
+                        label: path.basename(repo),
+                        description: repo,
+                        picked: provider.getSelectedRepos().has(repo)
+                    }));
+
+                    const selected = await vscode.window.showQuickPick(items, {
+                        canPickMany: true,
+                        title: 'Select Repositories to show',
+                        placeHolder: 'Select repositories to show'
+                    });
+
+                    if (selected) {
+                        const selectedRepos = selected.map(item => item.description);
+                        provider.updateSelectedRepos(selectedRepos);
+                    }
+                }
+            );
+
             context.subscriptions.push(
                 view,
                 showCommitViewCommand,
                 refreshCommand,
-                toggleViewCommand
+                toggleViewCommand,
+                selectReposCommand
             );
         }).catch(error => {
             console.error('Error finding repositories:', error);
