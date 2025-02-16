@@ -181,6 +181,10 @@ window.addEventListener('message', event => {
 
     try {
         switch (message.type) {
+            case 'toggleViewMode':
+                isTreeView = message.isTreeView;
+                updateView();
+                break;
             case 'updateChanges':
                 log('Received updateChanges message: ' + JSON.stringify(message));
                 if (message.status) {
@@ -706,23 +710,49 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
         requestAnimationFrame(() => checkbox.focus());
     });
 
-    // Create root level file nodes
-    const rootFiles = fileTree._files || [];
-    rootFiles.forEach(file => {
-        if (!file.includes('/')) {
-            childrenDiv.appendChild(createFileNode(repoPath, file, section));
-        }
-    });
-
-    // Create directory nodes
-    Object.entries(fileTree)
-        .filter(([key]) => key !== '_files')
-        .forEach(([key, value]) => {
-            childrenDiv.appendChild(
-                createDirectoryNode(repoPath, key, value as FileTreeNode, section)
-            );
+    if (isTreeView) {
+        // Create root level file nodes
+        const rootFiles = fileTree._files || [];
+        rootFiles.forEach(file => {
+            if (!file.includes('/')) {
+                childrenDiv.appendChild(createFileNode(repoPath, file, section));
+            }
         });
 
+        // Create directory nodes
+        Object.entries(fileTree)
+            .filter(([key]) => key !== '_files')
+            .forEach(([key, value]) => {
+                childrenDiv.appendChild(
+                    createDirectoryNode(repoPath, key, value as FileTreeNode, section)
+                );
+            });
+    } else {
+        log('Updating view in flat view', 'info');  
+        // Flat view - recursively get all files from the tree
+        function getAllFilesFromTree(tree: FileTreeNode): string[] {
+            let files: string[] = [...(tree._files || [])];
+            
+            // Get files from all subdirectories
+            Object.entries(tree)
+                .filter(([key]) => key !== '_files')
+                .forEach(([_, value]) => {
+                    files = files.concat(getAllFilesFromTree(value as FileTreeNode));
+                });
+            
+            return files;
+        }
+
+        // Get all files and create file nodes
+        const allFiles = getAllFilesFromTree(fileTree);
+        allFiles.forEach(file => {
+            childrenDiv.appendChild(createFileNode(repoPath, file, section));
+        });
+
+        childrenDiv.classList.toggle('expanded');
+        toggleSpan.classList.toggle('codicon-chevron-right');
+        toggleSpan.classList.toggle('codicon-chevron-down');
+    }
     return repoNode;
 }
 
