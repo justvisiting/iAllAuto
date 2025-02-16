@@ -1262,12 +1262,26 @@ function toggleNodesUnderRepo(repoPath: string, checked: boolean, section: Secti
     
     // First update all top-level items
     allCheckboxes.forEach(checkbox => {
+        log('checkboxes...', 'info', checkbox.dataset);
         const checkboxDir = checkbox.dataset.dir;
         const checkboxFile = checkbox.dataset.file;
         
-        // Skip the repo checkbox itself
+        // Skip if neither file nor directory
         if (!checkboxDir && !checkboxFile) return;
-        
+
+        if (!isTreeView) {
+            // Update file selection
+            checkbox.checked = checked;
+            checkbox.indeterminate = false;
+            if (checkboxFile) {
+                if (checked) {
+                    selectFile(repoPath, checkboxFile, section);
+                } else {
+                    unselectFile(repoPath, checkboxFile, section);
+                }
+            }
+        } else {
+
         // If it's a top-level item (no slashes in path)
         if ((checkboxDir && !checkboxDir.includes('/')) || 
             (checkboxFile && !checkboxFile.includes('/'))) {
@@ -1286,6 +1300,7 @@ function toggleNodesUnderRepo(repoPath: string, checked: boolean, section: Secti
                 }
             }
         }
+    }
     });
     
     
