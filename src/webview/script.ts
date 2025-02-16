@@ -696,9 +696,6 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
     checkbox.addEventListener('change', () => handleRepoCheckboxToggle(repoPath, checkbox.checked, section));
     contentDiv.appendChild(checkbox);
 
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'codicon codicon-git-branch';
-    contentDiv.appendChild(iconSpan);
 
     const label = document.createElement('span');
     label.className = 'tree-label';
@@ -1080,10 +1077,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     contentDiv.appendChild(checkbox);
 
     
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'codicon codicon-folder';
-    contentDiv.appendChild(iconSpan);
-
+    
     const label = document.createElement('span');
     label.className = 'tree-label';
     label.textContent = dirPath.split('/').pop() || '';
@@ -1207,10 +1201,7 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     });
     contentDiv.appendChild(checkbox);
 
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'codicon codicon-file';
-    contentDiv.appendChild(iconSpan);
-
+    
     const label = document.createElement('span');
     label.className = 'tree-label';
     label.textContent = file;
