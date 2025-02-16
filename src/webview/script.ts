@@ -248,6 +248,14 @@ window.addEventListener('message', event => {
                 log(`Error opening file ${message.file}: ${message.error}`, 'error');
                 break;
                 
+            case 'diffOpened':
+                log(`Diff opened successfully for file: ${message.file}`, 'success');
+                break;
+                
+            case 'diffError':
+                log(`Error opening diff for file ${message.file}: ${message.error}`, 'error');
+                break;
+                
             default:
                 break;
                 //log('Unknown message type/command: ' + (message.type || message.command), 'error');
@@ -1138,6 +1146,20 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
             file: fullPath,
             requestId: Date.now().toString()
         });
+        requestAnimationFrame(() => checkbox.focus());
+    });
+
+    contentDiv.addEventListener('dblclick', (e) => {
+        if (e.target === checkbox) return;
+        
+        const fullPath = repoPath ? `${repoPath}/${file}` : file;
+        log(`Requesting to open diff for file: ${fullPath}`);
+        vscode.postMessage({
+            type: 'openDiff',
+            file: fullPath,
+            requestId: Date.now().toString()
+        });
+        e.preventDefault(); // Prevent text selection on double click
         requestAnimationFrame(() => checkbox.focus());
     });
 

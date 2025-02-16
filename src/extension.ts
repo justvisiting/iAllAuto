@@ -169,6 +169,52 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                     break;
+                case 'openDiff':
+                    try {
+                        const uri = vscode.Uri.file(data.file);
+                        const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports;
+                        const git = gitExtension.getAPI(1);
+
+                        if (git) {
+                            // Get the repository for this file
+                            const repository = git.repositories.find((repo: any) => 
+                                data.file.startsWith(repo.rootUri.fsPath)
+                            );
+
+                            if (repository) {
+                                // Use Git API to create URI
+                                const headUri = git.toGitUri(uri, 'HEAD');
+                                
+                                // Open diff between working tree and HEAD
+                                await vscode.commands.executeCommand('vscode.diff',
+                                    uri,        // current working tree version
+                                    headUri,    // HEAD version from Git
+                                    `${data.file} (Working Tree ↔ HEAD)` // title
+                                );
+                                
+                                // Send success response
+                                webviewView.webview.postMessage({
+                                    type: 'diffOpened',
+                                    file: data.file,
+                                    success: true
+                                });
+                            } else {
+                                throw new Error('No Git repository found for this file');
+                            }
+                        } else {
+                            throw new Error('Git extension not available');
+                        }
+                    } catch (error: any) {
+                        console.error('Error opening diff:', error);
+                        // Send error response
+                        webviewView.webview.postMessage({
+                            type: 'diffError',
+                            file: data.file,
+                            success: false,
+                            error: error?.message || 'Unknown error'
+                        });
+                    }
+                    break;
             }
         });
 
