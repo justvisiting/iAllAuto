@@ -1204,7 +1204,7 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     
     const label = document.createElement('span');
     label.className = 'tree-label';
-    label.textContent = file;
+    label.textContent = file.split('/').pop() || file; // Show only filename
     contentDiv.appendChild(label);
 
     fileNode.appendChild(contentDiv);
