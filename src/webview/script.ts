@@ -488,39 +488,28 @@ function updateParentDirectoryCheckboxes(repoPath: string, dirPath: string, sect
 }
 
 function toggleSection(sectionId: Section, isChecked: boolean): void {
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-
-    const fileCheckboxes = section.querySelectorAll('input[type="checkbox"][data-repo]') as NodeListOf<HTMLInputElement>;
+    log(`Toggling section ${sectionId} to ${isChecked}`);
     
-    const processedRepos = new Set<string>();
-    fileCheckboxes.forEach(checkbox => {
-        const repoPath = checkbox.dataset.repo;
-        
-        if (repoPath && !processedRepos.has(repoPath)) {
-            processedRepos.add(repoPath);
-            const fileTree = currentFilesBySection[getRepoKey(repoPath, sectionId)];
-            if (fileTree) {
-                const allFiles = getAllFilesUnderTree(fileTree);
-                allFiles.forEach(file => {
-                    if (isChecked) {
-                        selectedFiles.add(getFileKey(repoPath, sectionId, file));
-                    } else {
-                        selectedFiles.delete(getFileKey(repoPath, sectionId, file));
-                    }
-                });
+    const section = document.getElementById(sectionId);
+    if (!section) {
+        log(`Section ${sectionId} not found`, 'error');
+        return;
+    }
+
+    const repos = section.querySelectorAll('.repo-node');
+    repos.forEach((repo: Element) => {
+        const repoPath = (repo as HTMLElement).dataset.repo;
+        if (repoPath) {
+            toggleNodesUnderRepo(repoPath, isChecked, sectionId);
+            const repoCheckbox = repo.querySelector('input[type="checkbox"]') as HTMLInputElement;
+            if (repoCheckbox) {
+                repoCheckbox.checked = isChecked;
             }
         }
     });
 
-    const sectionCheckbox = document.getElementById(`${sectionId}-checkbox`) as HTMLInputElement;
-    if (sectionCheckbox) {
-        sectionCheckbox.checked = isChecked;
-        sectionCheckbox.indeterminate = false;
-    }
-
     //updateSectionCheckboxStates();
-    //updateView();
+    updateCommitButton();
 }
 
 function createSectionNode(sectionId: Section, title: string): SectionNode {
