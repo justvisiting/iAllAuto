@@ -443,7 +443,7 @@ input[type="checkbox"] {
     gap: 8px;
 }
 
-#commit-message {
+#commit-message, .debug-textarea {
     width: 100%;
     min-height: 60px;
     margin: 0;
@@ -453,6 +453,14 @@ input[type="checkbox"] {
     color: var(--vscode-input-foreground);
     resize: vertical;
     border-radius: 4px;
+}
+
+.debug-textarea {
+    background-color: var(--vscode-editor-background);
+    border-color: var(--vscode-editorLineNumber-foreground);
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    min-height: 100px;
 }
 
 #commit-button {

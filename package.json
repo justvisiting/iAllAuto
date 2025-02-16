@@ -72,9 +72,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && webpack --mode production",
-    "watch": "webpack --watch --mode development",
-    "dev": "concurrently \"webpack --watch --mode development\" \"tsc -watch -p ./\"",
+    "compile": "tsc -p ./ && webpack --mode production --env production",
+    "watch": "webpack --watch --mode development --env development",
+    "dev": "concurrently \"webpack --watch --mode development --env development\" \"tsc -watch -p ./\"",
     "dev.thml": "webpack --watch --mode development & node dev-server.js",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",

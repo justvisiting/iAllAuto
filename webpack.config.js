@@ -1,8 +1,9 @@
 const path = require('path');
+const webpack = require('webpack');
 
-module.exports = {
-    mode: 'development',
-    devtool: 'inline-source-map',
+module.exports = (env) => ({
+    mode: env.production ? 'production' : 'development',
+    devtool: env.production ? false : 'inline-source-map',
     entry: './src/webview/script.ts',
     output: {
         path: path.resolve(__dirname, 'out', 'webview'),
@@ -23,5 +24,10 @@ module.exports = {
     },
     externals: {
         vscode: 'commonjs vscode'
-    }
-};
+    },
+    plugins: [
+        new webpack.DefinePlugin({
+            __DEV__: env.production ? 'false' : 'true'
+        })
+    ]
+});

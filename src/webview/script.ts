@@ -90,7 +90,9 @@ let focusedNodeId: string | null = null;
 let isTreeView: boolean = true;
 
 // Debug environment flag
+declare const __DEV__: boolean;
 const isDebugEnv = window.location.hostname === 'localhost';
+const isDevelopmentMode = __DEV__;
 
 function log(message: string, type: 'info' | 'error' | 'success' = 'info', ...args: any[]): void {
     // Ignore messages containing 'hello'
@@ -273,8 +275,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (commitMessage) {
         commitMessage.addEventListener('input', updateCommitButton);
     }
-        
-        
+
+    // Add debug textarea in development mode
+    if (isDevelopmentMode) {
+        const commitSection = document.getElementById('commit-section');
+        if (commitSection) {
+            const debugBox = document.createElement('textarea');
+            debugBox.id = 'debug-message';
+            debugBox.className = 'debug-textarea';
+            debugBox.placeholder = 'Debug output will appear here...';
+            debugBox.readOnly = true;
+            commitSection.appendChild(debugBox);
+
+            // Capture console.log output
+            const originalLog = console.log;
+            console.log = function(...args) {
+                originalLog.apply(console, args);
+                debugBox.value += args.map(arg => 
+                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                ).join(' ') + '\n';
+                debugBox.scrollTop = debugBox.scrollHeight;
+            };
+        }
+    }
 });
 
 function updateView(): void {
@@ -810,11 +833,19 @@ function handleCommit(): void {
 
     log('[handleCommit] Sending commit message to VS Code');
     log('[handleCommit] Selected paths', 'info', selectedPaths);
-    vscode.postMessage({
-        command: 'commit',
-        message: commitMessage,
-        files: selectedPaths
-    });
+    if (isDevelopmentMode) {
+        log('[handleCommit] Debug mode enabled, will not actually commit', 'info');
+        const debugBox = document.getElementById('debug-message') as HTMLTextAreaElement;
+        if (debugBox) {
+            debugBox.value = selectedPaths.map(fileinfo => JSON.stringify(fileinfo, null, 2)).join('\n');
+        }
+    } else {
+        vscode.postMessage({
+            command: 'commit',
+            message: commitMessage,
+            files: selectedPaths
+        });
+    }
 }
 
 function toggleNodeSelection(nodeId: string): void {
