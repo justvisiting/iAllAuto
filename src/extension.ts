@@ -164,7 +164,7 @@ class CommitViewProvider implements vscode.WebviewViewProvider {
                     try {
                         const uri = vscode.Uri.file(data.file);
                         const doc = await vscode.workspace.openTextDocument(uri);
-                        await vscode.window.showTextDocument(doc);
+                        await vscode.window.showTextDocument(doc, { preserveFocus: true });
                         
                         // Send success response
                         webviewView.webview.postMessage({

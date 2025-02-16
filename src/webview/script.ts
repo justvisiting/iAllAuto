@@ -1152,11 +1152,10 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
         const keyEvent = e as KeyboardEvent;
         if (keyEvent.key === 'Enter') {
             log('Enter key pressed on file node');            
-        //requestAnimationFrame(() => checkbox.focus());
             const fullPath = repoPath ? `${repoPath}/${file}` : file;
-            log(`Requesting to open diff for file: ${fullPath}`);
+            log(`Requesting to open ${section === 'unversioned' ? 'file' : 'diff'} for file: ${fullPath}`);
             vscode.postMessage({
-                type: 'openDiff',
+                type: section === 'unversioned' ? 'openFile' : 'openDiff',
                 file: fullPath,
                 requestId: Date.now().toString()
             });
@@ -1186,9 +1185,9 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
         if (e.target === checkbox) return;
         
         const fullPath = repoPath ? `${repoPath}/${file}` : file;
-        log(`Requesting to open diff for file: ${fullPath}`);
+        log(`Requesting to open ${section === 'unversioned' ? 'file' : 'diff'} for file: ${fullPath}`);
         vscode.postMessage({
-            type: 'openDiff',
+            type: section === 'unversioned' ? 'openFile' : 'openDiff',
             file: fullPath,
             requestId: Date.now().toString()
         });
