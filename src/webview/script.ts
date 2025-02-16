@@ -1297,6 +1297,17 @@ function moveToNextCheckbox(activeElement: HTMLElement): void {
     }
 }
 
+function moveToPreviousCheckbox(activeElement: HTMLElement): void {
+    const checkboxes: NodeListOf<HTMLInputElement> = document.querySelectorAll('input[type="checkbox"]');
+    const visibleElements = Array.from(checkboxes).filter(isElementVisible) as HTMLInputElement[];
+    const currentIndex = activeElement instanceof HTMLInputElement ? visibleElements.indexOf(activeElement) : -1;
+    const nextElement = visibleElements[currentIndex - 1];
+    printElementInfo('Previous visible element:', nextElement);
+    if (nextElement) {
+        nextElement.focus();
+    }
+}
+
 document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         const activeElement = document.activeElement as HTMLElement;
@@ -1314,14 +1325,7 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
         }
         if (event.key === 'ArrowUp') {
             event.preventDefault();
-            const checkboxes: NodeListOf<HTMLInputElement> = document.querySelectorAll('input[type="checkbox"]');
-            const visibleElements = Array.from(checkboxes).filter(isElementVisible) as HTMLInputElement[];
-            const currentIndex = activeElement instanceof HTMLInputElement ? visibleElements.indexOf(activeElement) : -1;
-            const nextElement = visibleElements[currentIndex - 1] //|| visibleElements[0];
-            printElementInfo('Next visible element:', nextElement);
-            if (nextElement) {
-                nextElement.focus();
-            }
+            moveToPreviousCheckbox(activeElement);
         }
         if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
             event.preventDefault();
@@ -1349,17 +1353,49 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
                             // Already expanded, move to next checkbox like ArrowDown
                             moveToNextCheckbox(activeElement);
                         }
-                    } else if (event.key === 'ArrowLeft' && childrenDiv.classList.contains('expanded')) {
-                        childrenDiv.classList.remove('expanded');
-                        toggleSpan.classList.remove('codicon-chevron-down');
-                        toggleSpan.classList.add('codicon-chevron-right');
+                    } else if (event.key === 'ArrowLeft') {
+                        if (childrenDiv.classList.contains('expanded')) {
+                            // If expanded, collapse it
+                            childrenDiv.classList.remove('expanded');
+                            toggleSpan.classList.remove('codicon-chevron-down');
+                            toggleSpan.classList.add('codicon-chevron-right');
+                        } else {
+                            // If not expanded, try to collapse parent
+                            const parentTreeNode = treeNode.parentElement?.closest('.tree-node');
+                            if (parentTreeNode) {
+                                const parentChildrenDiv = parentTreeNode.querySelector('.tree-children') as HTMLElement;
+                                const parentToggleSpan = parentTreeNode.querySelector('.codicon') as HTMLElement;
+                                if (parentChildrenDiv?.classList.contains('expanded')) {
+                                    parentChildrenDiv.classList.remove('expanded');
+                                    parentToggleSpan.classList.remove('codicon-chevron-down');
+                                    parentToggleSpan.classList.add('codicon-chevron-right');
+                                    const parentCheckbox = parentTreeNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                                    if (parentCheckbox) {
+                                        parentCheckbox.focus();
+                                    }
+                                } else {
+                                    moveToPreviousCheckbox(activeElement);
+                                }
+                            } else {
+                                moveToPreviousCheckbox(activeElement);
+                            }
+                        }
                     }
                 } else {
-                    moveToNextCheckbox(activeElement);
+                    // No expandable content, move like ArrowUp/Down
+                    if (event.key === 'ArrowRight') {
+                        moveToNextCheckbox(activeElement);
+                    } else {
+                        moveToPreviousCheckbox(activeElement);
+                    }
                 }
             } else {
-                // Not in a tree node, move to next checkbox like ArrowDown
-                moveToNextCheckbox(activeElement);
+                // Not in a tree node, move like ArrowUp/Down
+                if (event.key === 'ArrowRight') {
+                    moveToNextCheckbox(activeElement);
+                } else {
+                    moveToPreviousCheckbox(activeElement);
+                }
             }
         }
     }
