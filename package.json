@@ -75,6 +75,7 @@
     "compile": "tsc -p ./ && webpack --mode development",
     "watch": "webpack --watch --mode development",
     "dev": "webpack --watch --mode development & node dev-server.js",
+    "dev.thml": "webpack --watch --mode development & node dev-server.js",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test"
