@@ -1079,6 +1079,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
     });
     contentDiv.appendChild(checkbox);
 
+    
     const iconSpan = document.createElement('span');
     iconSpan.className = 'codicon codicon-folder';
     contentDiv.appendChild(iconSpan);
@@ -1132,6 +1133,25 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
     fileNode.dataset.repo = repoPath;
     fileNode.dataset.file = file;
     fileNode.dataset.section = section;
+    fileNode.setAttribute('data-file-path', file); // Store file path
+
+    fileNode.addEventListener('keydown', (e: Event) => {
+        const keyEvent = e as KeyboardEvent;
+        if (keyEvent.key === 'Enter') {
+            log('Enter key pressed on file node');            
+        //requestAnimationFrame(() => checkbox.focus());
+            const fullPath = repoPath ? `${repoPath}/${file}` : file;
+            log(`Requesting to open diff for file: ${fullPath}`);
+            vscode.postMessage({
+                type: 'openDiff',
+                file: fullPath,
+                requestId: Date.now().toString()
+            });
+            e.preventDefault();
+            e.stopPropagation();
+            requestAnimationFrame(() => { checkbox.focus(); });
+        }
+    });
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'tree-content';
@@ -1390,12 +1410,12 @@ function moveToPreviousCheckbox(activeElement: HTMLElement): void {
 }
 
 document.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+    if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'ArrowRight' || event.key === 'ArrowLeft' || event.key === 'Enter') {
         const activeElement = document.activeElement as HTMLElement;
         if (!activeElement) return;
 
         // Prevent default behavior for arrow keys
-        if (event.key !== 'Tab') {
+        if (event.key !== 'Tab' && event.key !== 'Enter') {
             event.preventDefault();
             event.stopPropagation();
         }
@@ -1450,7 +1470,7 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
             } else {
                 moveToNextCheckbox(activeElement);
             }
-        } else { // ArrowLeft
+        } else if (event.key === 'ArrowLeft') {
             if (isExpanded) {
                 childrenDiv.classList.remove('expanded');
                 toggleSpan.classList.remove('codicon-chevron-down');
@@ -1467,6 +1487,30 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
                     }
                 } else {
                     moveToPreviousCheckbox(activeElement);
+                }
+            }
+        } else if (event.key === 'Enter') {
+            log('Enter key pressed');
+            if (focusedNodeId) {
+                const focusedNode = document.getElementById(focusedNodeId);
+                if (focusedNode) {
+                    const file = focusedNode.getAttribute('data-file');
+                    const nodeRepoPath = focusedNode.getAttribute('data-repo');
+                    if (file) {
+                        const fullPath = nodeRepoPath ? `${nodeRepoPath}/${file}` : file;
+                        log(`Requesting to open diff for file: ${fullPath}`);
+                        vscode.postMessage({
+                            type: 'openDiff',
+                            file: fullPath,
+                            requestId: Date.now().toString()
+                        });
+                        event.preventDefault();
+                        event.stopPropagation();
+                        requestAnimationFrame(() => {
+                            const checkbox = focusedNode.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                            if (checkbox) checkbox.focus();
+                        });
+                    }
                 }
             }
         }
