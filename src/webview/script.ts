@@ -92,7 +92,7 @@ let isTreeView: boolean = true;
 // Debug environment flag
 declare const __DEV__: boolean;
 const isDebugEnv = window.location.hostname === 'localhost';
-const isDevelopmentMode = __DEV__;
+const isDevelopmentMode = isDebugEnv
 
 function log(message: string, type: 'info' | 'error' | 'success' = 'info', ...args: any[]): void {
     // Ignore messages containing 'hello'
@@ -530,7 +530,7 @@ function createSectionNode(sectionId: Section, title: string): SectionNode {
 
     sectionNode.appendChild(titleDiv);
 
-    const childrenDiv = document.createElement('div') as HTMLDivElement;
+    const childrenDiv = document.createElement('div');
     childrenDiv.className = 'section-content';
     sectionNode.appendChild(childrenDiv);
 
@@ -696,6 +696,7 @@ function createRepoNode(repoPath: string, fileTree: FileTreeNode, section: Secti
         childrenDiv.classList.toggle('expanded');
         toggleSpan.classList.toggle('codicon-chevron-right');
         toggleSpan.classList.toggle('codicon-chevron-down');
+        requestAnimationFrame(() => checkbox.focus());
     });
 
     // Create root level file nodes
@@ -1078,6 +1079,7 @@ function createDirectoryNode(repoPath: string, dirPath: string, fileTree: FileTr
         childrenDiv.classList.toggle('expanded');
         toggleSpan.classList.toggle('codicon-chevron-right');
         toggleSpan.classList.toggle('codicon-chevron-down');
+        requestAnimationFrame(() => checkbox.focus());
     });
 
     // Create file nodes for files in this directory
@@ -1112,6 +1114,10 @@ function createFileNode(repoPath: string, file: string, section: Section): TreeN
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'tree-content';
+    contentDiv.addEventListener('click', (e) => {
+        if (e.target === checkbox) return;
+        requestAnimationFrame(() => checkbox.focus());
+    });
 
     const checkbox = document.createElement('input') as HTMLInputElement;
     checkbox.type = 'checkbox';
